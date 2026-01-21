@@ -1,0 +1,4 @@
+UI_FR = {
+    UI_DaysUntilWinter_Days = "Jours avant l'hiver",
+    UI_DaysUntilWinter_Winter = "C'est maintenant l'hiver",
+}

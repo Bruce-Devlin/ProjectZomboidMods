@@ -1,0 +1,11 @@
+VERSION = 1,
+
+option GettingOld.YearLengthDays {
+    type = integer,
+    default = 365,
+    min = 1,
+    max = 365,
+    page = GettingOld,
+    translation = GettingOld_YearLengthDays,
+    tooltip = GettingOld_YearLengthDays_tooltip,
+}

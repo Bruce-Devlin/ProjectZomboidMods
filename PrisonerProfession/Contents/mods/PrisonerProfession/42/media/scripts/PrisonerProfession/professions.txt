@@ -1,0 +1,12 @@
+module PrisonerProfession
+{
+    character_profession_definition prisonerprofession:prisoner
+    {
+        CharacterProfession = prisonerprofession:prisoner,
+        Cost = 2,
+        UIName = Prisoner,
+        UIDescription = Start as a prisoner in jail sentenced to life but luckily it looks like you're getting out early...,
+        IconPathName = profession_prisoner,
+        XPBoosts = Sneak=1;Lightfoot=1;Strength=2,
+    }
+}

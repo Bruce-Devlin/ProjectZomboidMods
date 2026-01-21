@@ -1,0 +1,45 @@
+module GettingOld {
+    character_trait_definition GettingOld:young
+    {
+        IsProfessionTrait = false,
+        DisabledInMultiplayer = false,
+        CharacterTrait = GettingOld:young,
+        Cost = 10,
+        UIName = Age: Young,
+        UIDescription = You start the game as a 21 year old. (Extra endurance | Higher pain tolerance | Less stressed),
+        MutuallyExclusiveTraits = GettingOld:adult;GettingOld:middle;GettingOld:elderly,
+    }
+
+    character_trait_definition GettingOld:adult
+    {
+        IsProfessionTrait = false,
+        DisabledInMultiplayer = false,
+        CharacterTrait = GettingOld:adult,
+        Cost = 5,
+        UIName = Age: Adult,
+        UIDescription = You start the game as a 30 year old. (Base stats but at least you're not 45),
+        MutuallyExclusiveTraits = GettingOld:young;GettingOld:middle;GettingOld:elderly,
+    }
+
+    character_trait_definition GettingOld:middle
+    {
+        IsProfessionTrait = false,
+        DisabledInMultiplayer = false,
+        CharacterTrait = GettingOld:middle,
+        Cost = -5,
+        UIName = Age: Middle aged,
+        UIDescription = You start the game as a 45 year old. (Less endurance | Lower pain tolerance | More stressed),
+        MutuallyExclusiveTraits = GettingOld:young;GettingOld:adult;GettingOld:elderly,
+    }
+
+    character_trait_definition GettingOld:elderly
+    {
+        IsProfessionTrait = false,
+        DisabledInMultiplayer = false,
+        CharacterTrait = GettingOld:elderly,
+        Cost = -10,
+        UIName = Age: Elderly,
+        UIDescription = You start the game as a 70 year old (No endurance | No pain tolerance | Always stressed | Might fall over | Soon to die of old age),
+        MutuallyExclusiveTraits = GettingOld:young;GettingOld:adult;GettingOld:middle,
+    }
+}

@@ -1,0 +1,4 @@
+UI_RU = {
+    UI_DaysUntilWinter_Days = "Дней до зимы",
+    UI_DaysUntilWinter_Winter = "Сейчас зима",
+}
