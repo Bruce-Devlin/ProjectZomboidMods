@@ -1,0 +1,58 @@
+{
+  "version": "2.0.0",
+  "inputs": [
+    {
+      "id": "modName",
+      "type": "pickString",
+      "description": "Select the mod folder to deploy/run",
+      "options": [
+        "DaysUntilWinter",
+        "GettingOld",
+        "PrisonerProfession"
+      ]
+    },
+    {
+      "id": "cleanDeploy",
+      "type": "pickString",
+      "description": "Clean deploy (delete destination first)?",
+      "options": ["false", "true"],
+      "default": "false"
+    }
+  ],
+  "tasks": [
+    {
+      "label": "PZ: Deploy selected mod to workshop",
+      "type": "process",
+      "command": "C:\\Program Files\\PowerShell\\7\\pwsh.exe",
+      "args": [
+        "-NoProfile",
+        "-ExecutionPolicy",
+        "Bypass",
+        "-File",
+        "${workspaceFolder}\\scripts\\deploy-mod.ps1",
+        "-ModName",
+        "${input:modName}",
+        "-Clean:$${input:cleanDeploy}"
+      ],
+      "problemMatcher": [],
+      "presentation": { "reveal": "always", "panel": "dedicated" }
+    },
+    {
+      "label": "PZ: Launch via Steam",
+      "type": "shell",
+      "command": "cmd",
+      "args": ["/c", "start", "", "steam://rungameid/108600"],
+      "problemMatcher": [],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "PZ: Deploy + Launch",
+      "dependsOrder": "sequence",
+      "dependsOn": ["PZ: Deploy selected mod to workshop", "PZ: Launch via Steam"],
+      "problemMatcher": []
+    }
+  ]
+}

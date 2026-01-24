@@ -104,7 +104,7 @@ function AgeSystem.apply(player)
             RollAddStat(stats, CharacterStat.PAIN, 0.02, 60)
             RollAddStat(stats, CharacterStat.STRESS, 0.02, 60)
         else
-            local decayBase = 0.001
+            local decayBase = 0.030
             local decayVariance = ZombRandFloat(0, 0.002)
             local decay = decayBase + decayVariance
             local scaledDecay = decay * (1 + ageFactor * 5)
@@ -119,7 +119,8 @@ function AgeSystem.apply(player)
             local currHealth = player:getHealth()
 
             bodyDamage:setOverallBodyHealth(currBodyHealth - scaledDecay)
-            player:setHealth(currHealth - scaledDecay)
+            local healthDecay = scaledDecay / 2
+            player:setHealth(currHealth - healthDecay)
 
             DevTools.debugLog("Getting Old",
                 string.format("Dying of old age | Health: %.3f | Body: %.3f | Decay: %.4f",
