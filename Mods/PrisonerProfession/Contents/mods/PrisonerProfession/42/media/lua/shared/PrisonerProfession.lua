@@ -394,14 +394,6 @@ Events.OnCreatePlayer.Add(function(playerIndex, player)
 
         log("Attempting to spawn prisoner...")
 
-        if not isMultiplayer() then
-            if isServerContext() then
-                log("Singleplayer: spawning prisoner directly")
-                spawnPrisoner(delayPlayer)
-            end
-            return
-        end
-
         local md = delayPlayer:getModData()
         if md.PrisonerSpawnRequested then
             log("Spawn already requested (client-side guard)")
@@ -409,6 +401,14 @@ Events.OnCreatePlayer.Add(function(playerIndex, player)
         end
 
         md.PrisonerSpawnRequested = true
+
+        if not isMultiplayer() then
+            if isServerContext() then
+                log("Singleplayer: spawning prisoner directly")
+                spawnPrisoner(delayPlayer)
+            end
+            return
+        end
 
         log("Sending RequestSpawn to server")
 

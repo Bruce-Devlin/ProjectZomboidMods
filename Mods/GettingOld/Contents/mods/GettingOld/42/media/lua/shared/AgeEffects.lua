@@ -136,6 +136,11 @@ function AgeSystem.apply(player)
         end
     end
 
+    if isServer() then
+        player:transmitModData()
+        player:transmitVisual()
+    end
+
     DevTools.debugLog("Getting Old",
     string.format(
         "Age:%d End:%.2f Fat:%.2f Pain:%.2f Stress:%.2f Tripping:%s",

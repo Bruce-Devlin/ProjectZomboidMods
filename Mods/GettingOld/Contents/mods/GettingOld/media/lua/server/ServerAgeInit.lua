@@ -21,14 +21,13 @@ local function assignAgeFromTraits(player)
     DevTools.debugLog("Getting Old", "Assigned Age: " .. md.Age)
 end
 
-Events.OnPlayerUpdate.Add(function()
-    local player = getPlayer()
+Events.OnCreatePlayer.Add(function(player)
     if not player then return end
 
     local md = player:getModData()
     if md._AgeAssigned then return end
 
-    DevTools.debugLog("Getting Old", "Starting Server Init")
+    DevTools.debugLog("Getting Old", "Starting Server Player Init")
 
     assignAgeFromTraits(player)
     if not md.birthDay or not md.birthMonth or not md.birthYear then
@@ -41,6 +40,9 @@ Events.OnPlayerUpdate.Add(function()
         md.birthDay = ZombRand(1, 20 + 1)
     end
     md._AgeAssigned = true
+
+    AgeSystem.apply(player)
+
     DevTools.debugLog("Getting Old", "Server Init complete")
 end)
 DevTools.debugLog("Getting Old", "Server Init Hooked.")
