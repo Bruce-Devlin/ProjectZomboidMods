@@ -125,6 +125,31 @@ local function giveBuildingKey(player, square)
     end
 end
 
+local function cleanupZombie(zombie)
+    if not zombie then return false end
+
+    local killed, killErr = pcall(function()
+        zombie:Kill(nil)
+    end)
+
+    if killed then
+        return true
+    end
+
+    log("Zombie Kill failed, falling back to direct removal: " .. tostring(killErr))
+
+    local removed, removeErr = pcall(function()
+        zombie:removeFromWorld()
+        zombie:removeFromSquare()
+    end)
+
+    if not removed then
+        log("Zombie removal failed: " .. tostring(removeErr))
+    end
+
+    return removed
+end
+
 local function lightZombieCleanup(centerSq, safeRadius, killRadiusMultiplier)
     log("Performing light zombie cleanup (radius=" .. tostring(safeRadius) .. ")")
 
@@ -148,14 +173,14 @@ local function lightZombieCleanup(centerSq, safeRadius, killRadiusMultiplier)
                             local zy = obj:getY() 
                             local dist2 = (zx - cx)^2 + (zy - cy)^2 
                             if dist2 <= (r1 * r1) then 
-                                obj:removeFromWorld() 
-                                obj:removeFromSquare()
-                                obj:sendObjectChange("remove")
-                                removed = removed + 1 
+                                if cleanupZombie(obj) then
+                                    removed = removed + 1
+                                end
                             elseif dist2 <= (r2 * r2) then 
                                 if ZombRand(10) < 5 then 
-                                    obj:Kill(nil)
-                                    removed = removed + 1
+                                    if cleanupZombie(obj) then
+                                        removed = removed + 1
+                                    end
                                 end 
                             end 
                         end 
@@ -166,6 +191,7 @@ local function lightZombieCleanup(centerSq, safeRadius, killRadiusMultiplier)
     end
 
     log("Zombie cleanup removed " .. tostring(removed) .. " zombies")
+    return removed
 end
 
 local function spawnPrisoner(player)
@@ -322,9 +348,7 @@ Events.OnGameStart.Add(function()
                         index, spawn.x, spawn.y, spawn.z
                     ))
 
-                    local before = totalRemoved
-                    lightZombieCleanup(sq, 5, 2)
-                    local after = totalRemoved
+                    totalRemoved = totalRemoved + lightZombieCleanup(sq, 5, 2)
 
                 else
                     log(string.format(
@@ -337,7 +361,7 @@ Events.OnGameStart.Add(function()
             end
         end
 
-        log("Initial zombie cleanup finished")
+        log("Initial zombie cleanup finished, removed " .. tostring(totalRemoved) .. " zombies")
 
     end, "InitZombieCleanup")
 
