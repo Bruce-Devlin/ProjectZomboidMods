@@ -1,7 +1,9 @@
 Sandbox_EN = {
     Sandbox_GettingOld = "Getting Old",
     Sandbox_GettingOld_YearLengthDays = "Year Length (Days)",
-    Sandbox_GettingOld_YearLengthDays_tooltip = "How many in-game days equal one year."
+    Sandbox_GettingOld_YearLengthDays_tooltip = "How many in-game days equal one year.",
+    Sandbox_GettingOld_EnableBirthdayHats = "Birthday Hats",
+    Sandbox_GettingOld_EnableBirthdayHats_tooltip = "Allow players to sometimes receive a birthday hat when they age up.",
 
     Sandbox_GettingOld_DateOfBirth = "Date of birth (Days)",
     Sandbox_GettingOld_DateOfBirth_tooltip = "How many in-game days equal one year."

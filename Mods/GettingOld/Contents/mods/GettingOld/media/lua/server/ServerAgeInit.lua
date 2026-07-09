@@ -6,7 +6,9 @@ local function assignAgeFromTraits(player)
     if not md then return end
     if md.Age then return end
 
-    if player:hasTrait(GettingOldRegistry.Young) then
+    if player:hasTrait(GettingOldRegistry.Zoomer) then
+        md.Age = 12
+    elseif player:hasTrait(GettingOldRegistry.Young) then
         md.Age = 21
     elseif player:hasTrait(GettingOldRegistry.Adult) then
         md.Age = 30

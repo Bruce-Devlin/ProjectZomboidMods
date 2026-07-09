@@ -76,7 +76,7 @@ function AgeSystem.apply(player)
 
     AgeSystem.updatePlayerHair(player)
 
-    if group == "Young" then
+    if group == "Zoomer" or group == "Young" then
         RollAddStat(stats, CharacterStat.ENDURANCE, 0.015, 60)
         RollRemoveStat(stats, CharacterStat.FATIGUE, 0.015, 60)
         RollRemoveStat(stats, CharacterStat.PAIN, 0.015, 60)

@@ -1,6 +1,8 @@
 if not DevTools or not DevTools.addTest or not AgeSystem then return end
 
 DevTools.addTest("GettingOld_B41_GroupYoungBounds", function()
+    DevTools.assertEquals("Zoomer", AgeSystem.getGroup(12))
+    DevTools.assertEquals("Zoomer", AgeSystem.getGroup(17))
     DevTools.assertEquals("Young", AgeSystem.getGroup(18))
     DevTools.assertEquals("Young", AgeSystem.getGroup(25))
 end)

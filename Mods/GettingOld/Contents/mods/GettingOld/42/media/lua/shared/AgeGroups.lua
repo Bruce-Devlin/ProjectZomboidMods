@@ -1,6 +1,7 @@
 AgeSystem = AgeSystem or {}
 
 AgeSystem.Groups = {
+    Zoomer = { min = 12, max = 17 },
     Young = { min = 18, max = 25 },
     Adult = { min = 26, max = 40 },
     Middle = { min = 41, max = 60 },

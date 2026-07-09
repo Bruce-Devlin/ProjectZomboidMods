@@ -24,7 +24,7 @@ function AgeSystem.apply(player)
     local stats = player:getStats()
     local fallTriggered = false
 
-    if group == "Young" then
+    if group == "Zoomer" or group == "Young" then
         RollAddStat(stats, CharacterStat.ENDURANCE, 0.015, 50)
         RollRemoveStat(stats, CharacterStat.FATIGUE, 0.015, 50)
         RollRemoveStat(stats, CharacterStat.PAIN, 0.015, 50)

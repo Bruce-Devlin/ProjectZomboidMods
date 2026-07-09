@@ -1,6 +1,7 @@
 GettingOldRegistry = {}
 
 -- GOOD TRAITS
+GettingOldRegistry.Zoomer = CharacterTrait.register("GettingOld:zoomer")
 GettingOldRegistry.Young = CharacterTrait.register("GettingOld:young")
 GettingOldRegistry.Adult = CharacterTrait.register("GettingOld:adult")
 

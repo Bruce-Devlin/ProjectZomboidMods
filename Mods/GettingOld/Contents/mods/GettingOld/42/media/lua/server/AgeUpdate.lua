@@ -1,22 +1,53 @@
 require "shared/AgeConfig"
 
+local BIRTHDAY_HAT_CHANCE = 30
+local BIRTHDAY_HAT_ITEM = "Base.Hat_PartyHat_Stars"
+
+local function tryGiveBirthdayHat(player, md, newAge)
+    if not AgeConfig.areBirthdayHatsEnabled() then
+        md._GettingOldBirthdayHatCheckedAge = newAge
+        return false
+    end
+
+    if md._GettingOldBirthdayHatCheckedAge == newAge then
+        return false
+    end
+
+    md._GettingOldBirthdayHatCheckedAge = newAge
+
+    if not DevTools.chance(BIRTHDAY_HAT_CHANCE, 100) then
+        return false
+    end
+
+    local partyHat = player:getInventory():AddItem(BIRTHDAY_HAT_ITEM)
+    if partyHat then
+        partyHat:setName(tostring(player:getUsername()) .. "'s " .. tostring(newAge) .. " birthday hat!")
+        partyHat:setTooltip("A lucky birthday hat")
+        return true
+    end
+
+    return false
+end
+
 local function playerBirthday(player, oldAge, newAge)
     local md = player:getModData()
     local yearsGained = newAge - oldAge
     local newGroup = AgeSystem.getGroup(newAge)
 
+    if md._GettingOldLastBirthdayAge == newAge then
+        md.Age = newAge
+        DevTools.debugLog("Getting Old", "Birthday already handled for age " .. tostring(newAge))
+        return
+    end
+
     md.Age = newAge
+    md._GettingOldLastBirthdayAge = newAge
 
     AgeSystem.removeNonFittingAgeTraits(player, newGroup)
     AgeSystem.addRandomAgeTrait(player, newGroup)
 
-    if DevTools.chance(30, 100) then
+    if tryGiveBirthdayHat(player, md, newAge) then
         DevTools.saySafe(player, "I can't believe I am " .. md.Age .. " years old today, and I found a party hat!")
-        local partyHat = player:getInventory():AddItem("Base.Hat_PartyHat_Stars")
-        if partyHat then
-            partyHat:setName(tostring(player:getUsername()) .. "'s " .. tostring(newAge) .. " birthday hat!")
-            partyHat:setTooltip("A lucky birthday hat")
-        end
     else 
         DevTools.saySafe(player, "I am " .. md.Age .. " years old today!")
     end

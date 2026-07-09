@@ -14,3 +14,12 @@ function AgeConfig.getYearLengthDays()
     DevTools.debugLog("Getting Old", "Year length fallback = " .. DEFAULT_YEAR_LENGTH)
     return DEFAULT_YEAR_LENGTH
 end
+
+function AgeConfig.areBirthdayHatsEnabled()
+    if SandboxVars and SandboxVars.GettingOld and SandboxVars.GettingOld.EnableBirthdayHats ~= nil then
+        local value = SandboxVars.GettingOld.EnableBirthdayHats
+        return value ~= false and value ~= 0 and string.lower(tostring(value)) ~= "false"
+    end
+
+    return true
+end

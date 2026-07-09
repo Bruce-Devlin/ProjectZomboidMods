@@ -9,3 +9,11 @@ option GettingOld.YearLengthDays {
     translation = GettingOld_YearLengthDays,
     tooltip = GettingOld_YearLengthDays_tooltip,
 }
+
+option GettingOld.EnableBirthdayHats {
+    type = boolean,
+    default = true,
+    page = GettingOld,
+    translation = GettingOld_EnableBirthdayHats,
+    tooltip = GettingOld_EnableBirthdayHats_tooltip,
+}

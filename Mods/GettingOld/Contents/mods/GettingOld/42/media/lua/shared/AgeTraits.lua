@@ -1,6 +1,15 @@
 AgeSystem = AgeSystem or {}
 
 AgeSystem.AgeTraits = {
+    Zoomer = {
+        CharacterTrait.DEXTROUS,
+        CharacterTrait.FIT,
+        CharacterTrait.GRACEFUL,
+        CharacterTrait.FAST_LEARNER,
+        CharacterTrait.JOGGER,
+        CharacterTrait.NEEDS_MORE_SLEEP,
+    },
+
     Young = {
         CharacterTrait.DEXTROUS,
         CharacterTrait.FIT,
@@ -95,11 +104,12 @@ function AgeSystem.removeNonFittingAgeTraits(player, ageGroup)
         return 
     end
 
-    if ageGroup == "Young" or ageGroup == "Adult" then return end
+    if ageGroup == "Zoomer" or ageGroup == "Young" or ageGroup == "Adult" then return end
 
     local traits = player:getCharacterTraits()
 
     local groupsToRemove = {
+        AgeSystem.AgeTraits.Zoomer,
         AgeSystem.AgeTraits.Young,
         AgeSystem.AgeTraits.Adult,
     }

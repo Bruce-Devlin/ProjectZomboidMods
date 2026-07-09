@@ -1,4 +1,8 @@
+local GettingOldRegistry = require("GettingOld/Registries")
 local delayTicks = 0
+local zoomerSpeechTicks = 0
+local ZOOMER_SPEECH_INTERVAL_TICKS = 1800
+local ZOOMER_SPEECH_CHANCE_PERCENT = 10
 
 local function ClientAgeInit()
     local player = getPlayer()
@@ -18,6 +22,19 @@ local function ClientAgeInit()
     DevTools.saySafe(player, "I can't believe I'm " .. age .. " and having to deal with the zombie apocalypse...")
 
     DevTools.debugLog("Getting Old", "Client Init complete")
+end
+
+local function ZoomerRandomSpeech()
+    local player = getPlayer()
+    if not player or not player:hasTrait(GettingOldRegistry.Zoomer) then return end
+
+    zoomerSpeechTicks = zoomerSpeechTicks + 1
+    if zoomerSpeechTicks < ZOOMER_SPEECH_INTERVAL_TICKS then return end
+    zoomerSpeechTicks = 0
+
+    if ZombRand(100) < ZOOMER_SPEECH_CHANCE_PERCENT then
+        DevTools.saySafe(player, "67")
+    end
 end
 
 local function HookHealthPanel()
@@ -59,6 +76,7 @@ local function HookHealthPanel()
 end
 
 Events.OnPlayerUpdate.Add(ClientAgeInit)
+Events.OnPlayerUpdate.Add(ZoomerRandomSpeech)
 Events.OnGameStart.Add(HookHealthPanel)
 
 DevTools.debugLog("Getting Old", "Client Init Hooked.")
