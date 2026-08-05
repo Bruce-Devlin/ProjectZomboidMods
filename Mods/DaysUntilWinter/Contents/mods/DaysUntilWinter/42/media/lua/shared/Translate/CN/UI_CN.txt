@@ -1,4 +1,0 @@
-UI_CN = {
-    UI_DaysUntilWinter_Days = "距离冬天还有",
-    UI_DaysUntilWinter_Winter = "现在是冬天",
-}

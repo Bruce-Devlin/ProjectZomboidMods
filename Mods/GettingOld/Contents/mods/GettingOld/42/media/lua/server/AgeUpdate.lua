@@ -1,7 +1,13 @@
-require "shared/AgeConfig"
+require "AgeConfig"
 
 local BIRTHDAY_HAT_CHANCE = 30
 local BIRTHDAY_HAT_ITEM = "Base.Hat_PartyHat_Stars"
+
+local function syncBirthdayState(player)
+    if isServer() then
+        player:transmitModData()
+    end
+end
 
 local function tryGiveBirthdayHat(player, md, newAge)
     if not AgeConfig.areBirthdayHatsEnabled() then
@@ -36,6 +42,7 @@ local function playerBirthday(player, oldAge, newAge)
 
     if md._GettingOldLastBirthdayAge == newAge then
         md.Age = newAge
+        syncBirthdayState(player)
         DevTools.debugLog("Getting Old", "Birthday already handled for age " .. tostring(newAge))
         return
     end
@@ -53,6 +60,7 @@ local function playerBirthday(player, oldAge, newAge)
     end
 
     DevTools.debugLog("Getting Old", "Player aged up by " .. yearsGained .. " years to " .. md.Age)
+    syncBirthdayState(player)
 end
 
 local function checkPlayerAge()

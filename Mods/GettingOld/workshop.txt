@@ -1,6 +1,6 @@
 version=1
 id=3643959369
-title=[B42.13] [SP/MP] Getting Old
+title=[B42.20] [SP/MP] Getting Old
 description=STILL A WORK IN PROGRESS
 description=
 description=Getting Old – Dynamic Aging System
@@ -50,6 +50,7 @@ description=
 description=Compatibility:
 description=Safe to add to existing saves (new characters is recommended otherwise you may be at RN-Jesus's mercy)
 description=Works in singleplayer and multiplayer
+description=Updated for Project Zomboid Build 42.20 stable
 description=Designed to avoid overwriting vanilla systems
 description=Lightweight and performance friendly
 description=

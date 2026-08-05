@@ -62,18 +62,17 @@ function DaysUntilWinterUI:updatePosition()
 end
 
 local uiAdded = false
+local ui = nil
 Events.OnTick.Add(function()
-    if uiAdded then return end
     if uiAdded then
         ui:updatePosition()
+        return
     end
     if getPlayer() then
-        local ui = DaysUntilWinterUI:new()
+        ui = DaysUntilWinterUI:new()
         ui:initialise()
         ui:addToUIManager()
         uiAdded = true
         DevTools.debugLog("Days Until Winter", "UI added to client")
     end
 end)
-
-require "shared/Tests_DaysUntilWinter"

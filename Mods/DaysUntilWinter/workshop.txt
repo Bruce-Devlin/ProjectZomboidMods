@@ -1,6 +1,6 @@
 version=1
 id=3640001497
-title=[B41->B42.13] [SP/MP] Days Until Winter
+title=[B41->B42.20] [SP/MP] Days Until Winter
 description=Days Until Winter – Seasonal Countdown System
 description=Ever wondered exactly how long you have before the cold sets in?
 description=Days Until Winter adds a clear, immersive countdown showing how many in-game days remain until winter begins in Project Zomboid.
@@ -42,7 +42,7 @@ description=DE – German (Deutsch)
 description=(Want your language added? Leave a comment!)
 description=
 description=Compatibility:
-description=Tested from Build 41 through Build 42.13
+description=Updated for Build 41 through Build 42.20
 description=Works in:
 description=- Singleplayer
 description=- Multiplayer (Peer-to-Peer)

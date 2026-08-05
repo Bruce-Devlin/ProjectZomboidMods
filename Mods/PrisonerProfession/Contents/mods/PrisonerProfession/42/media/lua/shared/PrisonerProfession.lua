@@ -1,10 +1,9 @@
 --------------------------------------------------
--- Prisoner Profession (Build 42.13)
+-- Prisoner Profession (Build 42.20)
 -- Single-file, MP-safe, server-authoritative
 --------------------------------------------------
 
-require "shared/PrisonSpawns"
-require "shared/Tests_PrisonerProfession"
+local PrisonSpawns = require "PrisonSpawns"
 
 local MOD_ID = "PrisonerProfession"
 local MODDATA_KEY = "PrisonerProfessionData"
@@ -58,6 +57,10 @@ Events.OnInitGlobalModData.Add(function()
 
     PrisonerData = data
     log("ModData ready (version=" .. tostring(data.version) .. ")")
+end)
+
+Events.OnServerStarted.Add(function()
+    log("Discovered " .. tostring(#PrisonSpawns.getAll()) .. " valid prison-cell spawns")
 end)
 
 --------------------------------------------------
@@ -123,6 +126,36 @@ local function giveBuildingKey(player, square)
         key:setTooltip("Luckily I was already planning a break-out, molded from a bar of soap but I really hope it works...")
         log("Gave Prison Key to player")
     end
+end
+
+local function getProfessionName(player)
+    local profession = player:getDescriptor():getCharacterProfession()
+    if not profession then return nil end
+
+    local ok, name = pcall(function()
+        return profession:getName()
+    end)
+
+    if ok and name then
+        return tostring(name)
+    end
+
+    return tostring(profession)
+end
+
+local function isPrisonerProfession(player)
+    local profession = player:getDescriptor():getCharacterProfession()
+    local registeredProfession = prisonerprofession
+        and prisonerprofession.CharacterProfession
+        and prisonerprofession.CharacterProfession.prisoner
+
+    if registeredProfession and profession == registeredProfession then
+        return true, getProfessionName(player)
+    end
+
+    local professionName = getProfessionName(player)
+    return professionName == "prisoner"
+        or professionName == "prisonerprofession:prisoner", professionName
 end
 
 local function cleanupZombie(zombie)
@@ -207,13 +240,19 @@ local function spawnPrisoner(player)
         return
     end
 
-    local prof = player:getDescriptor():getCharacterProfession()
-    if tostring(prof) ~= "prisonerprofession:prisoner" then
-        log("spawnPrisoner ignored: profession is " .. tostring(prof))
+    local isPrisoner, professionName = isPrisonerProfession(player)
+    if not isPrisoner then
+        log("spawnPrisoner ignored: profession is " .. tostring(professionName))
         return
     end
 
-    local spawn = PRISON_SPAWNS[ZombRand(#PRISON_SPAWNS) + 1]
+    local prisonSpawns = PrisonSpawns.getAll()
+    if #prisonSpawns == 0 then
+        log("spawnPrisoner aborted: no valid prison-cell spawns found")
+        return
+    end
+
+    local spawn = prisonSpawns[ZombRand(#prisonSpawns) + 1]
     log(string.format("Selected spawn point (%d,%d,%d)", spawn.x, spawn.y, spawn.z))
 
     local sq = getCell():getOrCreateGridSquare(spawn.x, spawn.y, spawn.z)
@@ -311,64 +350,6 @@ end)
 
 
 --------------------------------------------------
--- SERVER: Init zombie de-spawn (one-time per server start)
---------------------------------------------------
-
-local InitCleanupDone = false
-
-Events.OnGameStart.Add(function()
-    if not isServerContext() then return end
-    if InitCleanupDone then
-        log("Init zombie cleanup already performed, skipping")
-        return
-    end
-
-    InitCleanupDone = true
-
-    log("Scheduling initial prison zombie cleanup...")
-
-    DevTools.waitSeconds(5, function()
-        if not PRISON_SPAWNS or #PRISON_SPAWNS == 0 then
-            log("No prison spawns defined, skipping init cleanup")
-            return
-        end
-
-        log("Running initial zombie cleanup for prison spawns (" .. tostring(#PRISON_SPAWNS) .. " locations)")
-
-        local cell = getCell()
-        local totalRemoved = 0
-
-        for index, spawn in ipairs(PRISON_SPAWNS) do
-            if spawn.x and spawn.y and spawn.z then
-                local sq = cell:getOrCreateGridSquare(spawn.x, spawn.y, spawn.z)
-
-                if sq then
-                    log(string.format(
-                        "Init cleanup at spawn #%d (%d,%d,%d)",
-                        index, spawn.x, spawn.y, spawn.z
-                    ))
-
-                    totalRemoved = totalRemoved + lightZombieCleanup(sq, 5, 2)
-
-                else
-                    log(string.format(
-                        "Init cleanup skipped: grid square not loaded for spawn #%d (%d,%d,%d)",
-                        index, spawn.x, spawn.y, spawn.z
-                    ))
-                end
-            else
-                log("Invalid spawn entry at index " .. tostring(index))
-            end
-        end
-
-        log("Initial zombie cleanup finished, removed " .. tostring(totalRemoved) .. " zombies")
-
-    end, "InitZombieCleanup")
-
-end)
-
-
---------------------------------------------------
 -- CLIENT: One-time spawn request
 --------------------------------------------------
 local function locallyTeleportToLocation(x, y, z)
@@ -410,9 +391,9 @@ Events.OnCreatePlayer.Add(function(playerIndex, player)
     DevTools.waitSeconds(2, function()
         local delayPlayer = getPlayer()
 
-        local prof = player:getDescriptor():getCharacterProfession()
-        if tostring(prof) ~= "prisonerprofession:prisoner" then
-            log("Player profession: ".. tostring(prof))
+        local isPrisoner, professionName = isPrisonerProfession(player)
+        if not isPrisoner then
+            log("Player profession: ".. tostring(professionName))
             return
         end
 

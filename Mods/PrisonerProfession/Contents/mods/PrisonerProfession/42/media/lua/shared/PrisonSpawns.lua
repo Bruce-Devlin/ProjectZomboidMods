@@ -1,224 +1,67 @@
-PRISON_SPAWNS = {
-    -- KENTUCKY STATE PRISON
-    --LUCKY SPAWNS
-    --basement
-    { x = 7683, y = 11871, z = -1 },
+local PrisonSpawns = {}
 
-    --armory/escaped!
-    { x = 7739, y = 11904, z = 1 },
-
-    --MISC SPAWNS
-    --yard
-    { x = 7654, y = 11922, z = 0 },
-    
-    --CELLS, SOUTH-BLOCK, BOTTOM FLOOR
-    --left
-    { x = 7681, y = 11908, z = 0 },
-    { x = 7681, y = 11910, z = 0 },
-    { x = 7681, y = 11914, z = 0 },
-    { x = 7681, y = 11916, z = 0 },
-    { x = 7681, y = 11920, z = 0 },
-    { x = 7681, y = 11922, z = 0 },
-    { x = 7681, y = 11926, z = 0 },
-    { x = 7681, y = 11928, z = 0 },
-    { x = 7681, y = 11932, z = 0 },
-    { x = 7681, y = 11938, z = 0 },
-    { x = 7681, y = 11940, z = 0 },
-    { x = 7681, y = 11944, z = 0 },
-
-    --right
-    { x = 7698, y = 11908, z = 1 },
-    { x = 7698, y = 11910, z = 1 },
-    { x = 7698, y = 11914, z = 1 },
-    { x = 7698, y = 11916, z = 1 },
-    { x = 7698, y = 11920, z = 1 },
-    { x = 7698, y = 11922, z = 1 },
-    { x = 7698, y = 11926, z = 1 },
-    { x = 7698, y = 11928, z = 1 },
-    { x = 7698, y = 11932, z = 1 },
-    { x = 7698, y = 11934, z = 1 },
-    { x = 7698, y = 11938, z = 1 },
-    { x = 7698, y = 11940, z = 1 },
-    { x = 7698, y = 11944, z = 1 },
-
-
-    --CELLS, SOUTH-BLOCK, TOP FLOOR
-    --left
-    { x = 7681, y = 11895, z = 1 },
-    { x = 7681, y = 11899, z = 1 },
-    { x = 7681, y = 11901, z = 1 },
-    { x = 7681, y = 11905, z = 1 },
-    { x = 7681, y = 11907, z = 1 },
-    { x = 7681, y = 11911, z = 1 },
-    { x = 7681, y = 11913, z = 1 },
-    { x = 7681, y = 11917, z = 1 },
-    { x = 7681, y = 11919, z = 1 },
-    { x = 7681, y = 11923, z = 1 },
-    { x = 7681, y = 11925, z = 1 },
-    { x = 7681, y = 11929, z = 1 },
-    { x = 7681, y = 11931, z = 1 },
-    { x = 7681, y = 11935, z = 1 },
-    { x = 7681, y = 11937, z = 1 },
-    { x = 7681, y = 11941, z = 1 },
-    { x = 7681, y = 11943, z = 1 },
-
-    --right
-    { x = 7698, y = 11907, z = 1 },
-    { x = 7698, y = 11911, z = 1 },
-    { x = 7698, y = 11913, z = 1 },
-    { x = 7698, y = 11917, z = 1 },
-    { x = 7698, y = 11919, z = 1 },
-    { x = 7698, y = 11923, z = 1 },
-    { x = 7698, y = 11925, z = 1 },
-    { x = 7698, y = 11929, z = 1 },
-    { x = 7698, y = 11931, z = 1 },
-    { x = 7698, y = 11935, z = 1 },
-    { x = 7698, y = 11937, z = 1 },
-    { x = 7698, y = 11941, z = 1 },
-    { x = 7698, y = 11943, z = 1 },
-
-
-    --CELLS, NORTH-BLOCK, BOTTOM FLOOR
-    --left
-    { x = 7681, y = 11819, z = 1 },
-    { x = 7681, y = 11821, z = 1 },
-    { x = 7681, y = 11825, z = 1 },
-    { x = 7681, y = 11827, z = 1 },
-    { x = 7681, y = 11831, z = 1 },
-    { x = 7681, y = 11833, z = 1 },
-    { x = 7681, y = 11837, z = 1 },
-    { x = 7681, y = 11839, z = 1 },
-    { x = 7681, y = 11843, z = 1 },
-    { x = 7681, y = 11845, z = 1 },
-    { x = 7681, y = 11849, z = 1 },
-    { x = 7681, y = 11851, z = 1 },
-    { x = 7681, y = 11855, z = 1 },
-
-    --right
-    { x = 7697, y = 11819, z = 1 },
-    { x = 7697, y = 11821, z = 1 },
-    { x = 7697, y = 11825, z = 1 },
-    { x = 7697, y = 11827, z = 1 },
-    { x = 7697, y = 11831, z = 1 },
-    { x = 7697, y = 11833, z = 1 },
-    { x = 7697, y = 11837, z = 1 },
-    { x = 7697, y = 11839, z = 1 },
-    { x = 7697, y = 11843, z = 1 },
-    { x = 7697, y = 11845, z = 1 },
-    { x = 7697, y = 11849, z = 1 },
-    { x = 7697, y = 11851, z = 1 },
-    { x = 7697, y = 11855, z = 1 },
-
-    --CELLS, NORTH-BLOCK, TOP FLOOR
-    --left
-    { x = 7681, y = 11818, z = 1 },
-    { x = 7681, y = 11822, z = 1 },
-    { x = 7681, y = 11824, z = 1 },
-    { x = 7681, y = 11828, z = 1 },
-    { x = 7681, y = 11831, z = 1 },
-    { x = 7681, y = 11834, z = 1 },
-    { x = 7681, y = 11836, z = 1 },
-    { x = 7681, y = 11840, z = 1 },
-    { x = 7681, y = 11842, z = 1 },
-    { x = 7681, y = 11846, z = 1 },
-    { x = 7681, y = 11848, z = 1 },
-    { x = 7681, y = 11852, z = 1 },
-
-    --right
-    { x = 7696, y = 11818, z = 1 },
-    { x = 7696, y = 11822, z = 1 },
-    { x = 7696, y = 11824, z = 1 },
-    { x = 7696, y = 11828, z = 1 },
-    { x = 7696, y = 11831, z = 1 },
-    { x = 7696, y = 11834, z = 1 },
-    { x = 7696, y = 11836, z = 1 },
-    { x = 7696, y = 11840, z = 1 },
-    { x = 7696, y = 11842, z = 1 },
-    { x = 7696, y = 11846, z = 1 },
-    { x = 7696, y = 11848, z = 1 },
-    { x = 7696, y = 11852, z = 1 },
-    { x = 7696, y = 11854, z = 1 },
-
-
-    -- LOUISVILLE POLICE STATION
-    --BLOCK A
-    --left
-    { x = 12407, y = 1621, z = 0 },
-    { x = 12407, y = 1617, z = 0 },
-    { x = 12407, y = 1613, z = 0 },
-    { x = 12407, y = 1609, z = 0 },
-    { x = 12407, y = 1605, z = 0 },
-    { x = 12407, y = 1600, z = 0 },
-    { x = 12407, y = 1597, z = 0 },
-    { x = 12407, y = 1593, z = 0 },
-    { x = 12407, y = 1589, z = 0 },
-    { x = 12407, y = 1585, z = 0 },
-
-    --right
-    { x = 12415, y = 1617, z = 0 },
-    { x = 12417, y = 1613, z = 0 },
-    { x = 12417, y = 1608, z = 0 },
-    { x = 12417, y = 1605, z = 0 },
-    { x = 12417, y = 1601, z = 0 },
-    { x = 12417, y = 1597, z = 0 },
-    { x = 12417, y = 1593, z = 0 },
-    { x = 12417, y = 1588, z = 0 },
-
-    --BLOCK B
-    --left
-    { x = 12421, y = 1605, z = 0 },
-    { x = 12415, y = 1601, z = 0 },
-    { x = 12415, y = 1597, z = 0 },
-    { x = 12415, y = 1593, z = 0 },
-    { x = 12415, y = 1590, z = 0 },
-
-    --right
-    { x = 12429, y = 1589, z = 0 },
-    { x = 12415, y = 1593, z = 0 },
-    { x = 12415, y = 1597, z = 0 },
-
-    --BRANDENBURG PRISON
-    --BLOCK A
-    --bottom
-    { x = 1354, y = 5863, z = 0 },
-    { x = 1354, y = 1589, z = 0 },
-    { x = 1354, y = 5855, z = 0 },
-    { x = 1354, y = 5851, z = 0 },
-    { x = 1354, y = 5847, z = 0 },
-    { x = 1354, y = 5843, z = 0 },
-
-    { x = 1357, y = 5840, z = 0 },
-    { x = 1361, y = 5840, z = 0 },
-    { x = 1366, y = 5840, z = 0 },
-    { x = 1369, y = 5840, z = 0 },
-
-    { x = 1372, y = 5843, z = 0 },
-    { x = 1372, y = 5847, z = 0 },
-    { x = 1372, y = 5851, z = 0 },
-    { x = 1372, y = 5855, z = 0 },
-    { x = 1373, y = 5863, z = 0 },
-    --top
-    { x = 1354, y = 5863, z = 1 },
-    { x = 1354, y = 1589, z = 1 },
-    { x = 1354, y = 5855, z = 1 },
-    { x = 1354, y = 5851, z = 1 },
-    { x = 1354, y = 5847, z = 1 },
-    { x = 1354, y = 5843, z = 1 },
-
-    { x = 1357, y = 5840, z = 1 },
-    { x = 1361, y = 5840, z = 1 },
-    { x = 1366, y = 5840, z = 1 },
-    { x = 1369, y = 5840, z = 1 },
-
-    { x = 1372, y = 5843, z = 1 },
-    { x = 1372, y = 5847, z = 1 },
-    { x = 1372, y = 5851, z = 1 },
-    { x = 1372, y = 5855, z = 1 },
-    { x = 1373, y = 5863, z = 1 }
-
-    --BLOCK B
-    --bottom
-
-    --top
-
+local PRISON_ANCHORS = {
+    { name = "Kentucky State Penitentiary", x = 7681, y = 11819 },
+    { name = "Louisville Police Station", x = 12407, y = 1621 },
+    { name = "Brandenburg Prison", x = 1354, y = 5863 },
 }
+
+local cachedSpawns = nil
+
+local function addCellRooms(metaGrid, building, spawns, seen)
+    local rooms = building:getRooms()
+
+    for index = 0, rooms:size() - 1 do
+        local room = rooms:get(index)
+        if tostring(room:getName()) == "prisoncells" then
+            local x = math.floor((room:getX() + room:getX2() - 1) / 2)
+            local y = math.floor((room:getY() + room:getY2() - 1) / 2)
+            local z = room:getZ()
+            local key = string.format("%d:%d:%d", x, y, z)
+
+            if not seen[key] and metaGrid:getRoomAt(x, y, z) then
+                seen[key] = true
+                table.insert(spawns, { x = x, y = y, z = z })
+            end
+        end
+    end
+end
+
+function PrisonSpawns.getAll()
+    if cachedSpawns then
+        return cachedSpawns
+    end
+
+    local world = getWorld()
+    if not world then
+        return {}
+    end
+
+    local metaGrid = world:getMetaGrid()
+    if not metaGrid then
+        return {}
+    end
+
+    local spawns = {}
+    local seenBuildings = {}
+    local seenSpawns = {}
+
+    for _, anchor in ipairs(PRISON_ANCHORS) do
+        local building = metaGrid:getBuildingAt(anchor.x, anchor.y)
+        if building then
+            local buildingKey = tostring(building)
+            if not seenBuildings[buildingKey] then
+                seenBuildings[buildingKey] = true
+                addCellRooms(metaGrid, building, spawns, seenSpawns)
+            end
+        end
+    end
+
+    if #spawns > 0 then
+        cachedSpawns = spawns
+    end
+
+    return spawns
+end
+
+return PrisonSpawns

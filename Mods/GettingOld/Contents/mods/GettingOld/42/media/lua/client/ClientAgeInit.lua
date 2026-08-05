@@ -14,7 +14,7 @@ local function ClientAgeInit()
     local playerID = player:getOnlineID()
 
     DevTools.waitSeconds(5, function()
-        local playerRef = getPlayerByOnlineID(playerID)
+        local playerRef = playerID == 0 and getPlayer() or getPlayerByOnlineID(playerID)
         if not playerRef then return end
 
         local mdRef = playerRef:getModData()
