@@ -1,0 +1,14 @@
+{
+    "UI_GettingOld_Birthday_Title": "Choose Your Birthday",
+    "UI_GettingOld_Birthday_Description": "Choose your character's birth month and day before their age is set.",
+    "UI_GettingOld_Birthday_Month": "Month",
+    "UI_GettingOld_Birthday_Day": "Day",
+    "UI_GettingOld_Birthday_Confirm": "Set Birthday",
+    "UI_GettingOld_HeartAttack_Warning": "HEART ATTACK",
+    "UI_GettingOld_HeartAttack_Speech": "My chest... my heart!",
+    "UI_GettingOld_OldAgeWarning_1": "These old bones don't have many years left in them.",
+    "UI_GettingOld_OldAgeWarning_2": "I don't know how much longer I can go on.",
+    "UI_GettingOld_OldAgeWarning_3": "Every day feels heavier than the last.",
+    "UI_GettingOld_OldAgeWarning_4": "I can feel my time running short.",
+    "UI_GettingOld_OldAgeWarning_5": "My time has come."
+}

@@ -83,55 +83,59 @@ local function checkPlayerAge()
 
         DevTools.debugLog("Getting Old", "Checking player \"" .. tostring(player:getUsername()) .. "\" (age:" .. md.Age .. ") for age update...")
 
-        if not md.birthDayCount then
-            local yearLength = AgeConfig.getYearLengthDays()
-            if yearLength < 1 then yearLength = 1 end
+        local yearLength = AgeConfig.getYearLengthDays()
+        if yearLength < 1 then yearLength = 1 end
 
-            md.startAge = md.Age
-            md.birthDayCount = totalDaysNow - (yearLength - 1)
+        if not md._GettingOldAgeHoursSurvivedAnchor then
+            local oldCycleDays
+            if md.birthDayCount then
+                oldCycleDays = math.max(0, totalDaysNow - md.birthDayCount)
+            else
+                md.birthDayCount = totalDaysNow - (yearLength - 1)
+                oldCycleDays = yearLength - 1
+            end
+
+            md.startAge = md.startAge or md.Age
+            md._GettingOldAgeHoursSurvivedAnchor = player:getHoursSurvived()
+            md._GettingOldAgeCycleHoursAtAnchor = oldCycleDays * 24
 
             DevTools.debugLog("Getting Old",
                 string.format(
-                    "Initialized aging: startAge=%d today=%d birthDayCount=%d yearLength=%d",
+                    "Initialized precise aging: startAge=%d survivedHours=%.2f cycleHours=%.2f yearLength=%d",
                     md.startAge,
-                    totalDaysNow,
-                    md.birthDayCount,
+                    md._GettingOldAgeHoursSurvivedAnchor,
+                    md._GettingOldAgeCycleHoursAtAnchor,
                     yearLength
                 )
             )
         end
 
-        local daysAlive = totalDaysNow - md.birthDayCount
-        if daysAlive < 0 then
-            DevTools.debugLog("Getting Old", "Negative age days detected, skipping")
-            return
+        local survivedHours = player:getHoursSurvived()
+        local hoursSinceAnchor = survivedHours - md._GettingOldAgeHoursSurvivedAnchor
+        if hoursSinceAnchor < 0 then
+            DevTools.debugLog("Getting Old", "Negative age hours detected, resetting aging anchor")
+            md._GettingOldAgeHoursSurvivedAnchor = survivedHours
+            hoursSinceAnchor = 0
         end
 
-        DevTools.debugLog("Getting Old", "Days alive: " .. tostring(daysAlive))
-
-        AgeSystem.apply(player)
-
-        local yearLength = AgeConfig.getYearLengthDays()
-        if yearLength < 1 then yearLength = 1 end
-
-        local yearsPassed = math.floor(daysAlive / yearLength)
+        local cycleHours = (tonumber(md._GettingOldAgeCycleHoursAtAnchor) or 0) + hoursSinceAnchor
+        local yearHours = yearLength * 24
+        local yearsPassed = math.floor(cycleHours / yearHours)
         local expectedAge = md.startAge + yearsPassed
 
-        local daysIntoYear = daysAlive % yearLength
-        local daysUntilBirthday = yearLength - daysIntoYear
-        if daysUntilBirthday == yearLength then
-            daysUntilBirthday = 0
-        end
+        local hoursIntoYear = cycleHours % yearHours
+        local hoursUntilBirthday = yearHours - hoursIntoYear
+        if hoursUntilBirthday == yearHours then hoursUntilBirthday = 0 end
 
         DevTools.debugLog(
             "Getting Old",
             string.format(
-                "Expected age: %d | Start age: %d | Days alive: %d | Days into year: %d | Days until birthday: %d",
+                "Expected age: %d | Start age: %d | Hours survived: %.2f | Cycle hours: %.2f | Hours until birthday: %.2f",
                 expectedAge,
                 md.startAge,
-                daysAlive,
-                daysIntoYear,
-                daysUntilBirthday
+                survivedHours,
+                cycleHours,
+                hoursUntilBirthday
             )
         )
 
@@ -142,6 +146,11 @@ local function checkPlayerAge()
         if expectedAge > md.Age then
             playerBirthday(player, md.Age, expectedAge)
         end
+
+        -- Birthday processing comes first so a terminal old-age update cannot
+        -- kill the player while the UI still displays the previous age.
+        AgeSystem.apply(player)
+
     end
 end
 

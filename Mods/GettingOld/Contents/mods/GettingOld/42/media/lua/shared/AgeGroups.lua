@@ -5,7 +5,7 @@ AgeSystem.Groups = {
     Young = { min = 18, max = 25 },
     Adult = { min = 26, max = 40 },
     Middle = { min = 41, max = 60 },
-    Elderly = { min = 61, max = 90 },
+    Elderly = { min = 61, max = math.huge },
 }
 
 function AgeSystem.getGroup(age)

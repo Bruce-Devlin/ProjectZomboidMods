@@ -1,5 +1,31 @@
 VERSION = 1,
 
+option GettingOld.RandomStartingAge {
+    type = boolean,
+    default = true,
+    page = GettingOld,
+    translation = GettingOld_RandomStartingAge,
+    tooltip = GettingOld_RandomStartingAge_tooltip,
+}
+
+option GettingOld.StartingAge {
+    type = integer,
+    default = 30,
+    min = 12,
+    max = 120,
+    page = GettingOld,
+    translation = GettingOld_StartingAge,
+    tooltip = GettingOld_StartingAge_tooltip,
+}
+
+option GettingOld.RandomBirthday {
+    type = boolean,
+    default = false,
+    page = GettingOld,
+    translation = GettingOld_RandomBirthday,
+    tooltip = GettingOld_RandomBirthday_tooltip,
+}
+
 option GettingOld.YearLengthDays {
     type = integer,
     default = 365,
@@ -8,6 +34,34 @@ option GettingOld.YearLengthDays {
     page = GettingOld,
     translation = GettingOld_YearLengthDays,
     tooltip = GettingOld_YearLengthDays_tooltip,
+}
+
+option GettingOld.DeadlyAge {
+    type = integer,
+    default = 85,
+    min = 0,
+    max = 120,
+    page = GettingOld,
+    translation = GettingOld_DeadlyAge,
+    tooltip = GettingOld_DeadlyAge_tooltip,
+}
+
+option GettingOld.YearsUntilDeath {
+    type = integer,
+    default = 5,
+    min = 1,
+    max = 20,
+    page = GettingOld,
+    translation = GettingOld_YearsUntilDeath,
+    tooltip = GettingOld_YearsUntilDeath_tooltip,
+}
+
+option GettingOld.DeadlyAgeHeartAttacks {
+    type = boolean,
+    default = false,
+    page = GettingOld,
+    translation = GettingOld_DeadlyAgeHeartAttacks,
+    tooltip = GettingOld_DeadlyAgeHeartAttacks_tooltip,
 }
 
 option GettingOld.EnableBirthdayHats {

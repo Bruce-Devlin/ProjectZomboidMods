@@ -1,0 +1,19 @@
+{
+    "Sandbox_GettingOld": "Getting Old",
+    "Sandbox_GettingOld_RandomStartingAge": "Random Starting Age",
+    "Sandbox_GettingOld_RandomStartingAge_tooltip": "Give newly created characters a random starting age from 25 to 34. Disable this to use the exact Starting Age value instead. Any Getting Old age trait overrides both options.",
+    "Sandbox_GettingOld_StartingAge": "Starting Age (Years)",
+    "Sandbox_GettingOld_StartingAge_tooltip": "Sets a newly created character's exact starting age when Random Starting Age is disabled. Any Getting Old age trait overrides this value.",
+    "Sandbox_GettingOld_RandomBirthday": "Random Birthday",
+    "Sandbox_GettingOld_RandomBirthday_tooltip": "Give each newly created character a random birthday. When disabled, each player chooses their own birth month and day after character creation.",
+    "Sandbox_GettingOld_YearLengthDays": "Year Length (Days)",
+    "Sandbox_GettingOld_YearLengthDays_tooltip": "How many in-game days equal one year.",
+    "Sandbox_GettingOld_DeadlyAge": "Deadly Age (Years)",
+    "Sandbox_GettingOld_DeadlyAge_tooltip": "The age at which characters are marked for death from old age. Set this to 0 to disable death from old age.",
+    "Sandbox_GettingOld_YearsUntilDeath": "Years Until Death",
+    "Sandbox_GettingOld_YearsUntilDeath_tooltip": "About how many in-game years a character's health takes to decline from full to zero after being marked for death. Each character's duration varies randomly by up to 10 percent.",
+    "Sandbox_GettingOld_DeadlyAgeHeartAttacks": "Deadly Age Heart Attacks",
+    "Sandbox_GettingOld_DeadlyAgeHeartAttacks_tooltip": "Allow characters at or above the Deadly Age to suffer a fatal heart attack while extremely stressed or panicked. The risk rises sharply with age and danger. Disable Deadly Age by setting it to 0.",
+    "Sandbox_GettingOld_EnableBirthdayHats": "Birthday Hats",
+    "Sandbox_GettingOld_EnableBirthdayHats_tooltip": "Allow players to sometimes receive a birthday hat when they age up."
+}
