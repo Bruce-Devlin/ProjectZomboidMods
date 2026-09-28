@@ -1,3 +1,4 @@
+require "AgeConfig"
 require "ISUI/ISPanel"
 require "ISUI/ISButton"
 require "ISUI/ISComboBox"
@@ -9,8 +10,21 @@ local MONTHS = {
 }
 
 GettingOldBirthdayDialog = ISPanel:derive("GettingOldBirthdayDialog")
-local activeDialog = nil
-local waitingForServer = false
+local states = {}
+local RETRY_MS = 5000
+
+local function submitChoice(player, state)
+    state.sentAt = getTimestampMs()
+    local selected = state.month and not AgeConfig.useRandomBirthday()
+    if isClient() then
+        sendClientCommand(player, MOD_ID, selected and "SetBirthday" or "RequestAgeInit",
+            selected and { month = state.month, day = state.day } or {})
+    elseif state.month then
+        local md = player:getModData()
+        md._GettingOldBirthdayMonth = state.month
+        md._GettingOldBirthdayDay = state.day
+    end
+end
 
 function GettingOldBirthdayDialog:initialise()
     ISPanel.initialise(self)
@@ -62,27 +76,23 @@ function GettingOldBirthdayDialog:onConfirm()
     local player = self.player
     if not player or not month or not day then return end
 
+    local state = states[player:getPlayerNum()]
+    if not state or state.player ~= player then return end
+    state.month, state.day = month, day
     local md = player:getModData()
-    md._GettingOldBirthdayChoicePending = true
-    waitingForServer = true
-
-    if isClient() then
-        sendClientCommand(MOD_ID, "SetBirthday", { month = month, day = day })
-    else
-        md._GettingOldBirthdayMonth = month
-        md._GettingOldBirthdayDay = day
-    end
-
+    md._GettingOldBirthdayMonth, md._GettingOldBirthdayDay = month, day
+    submitChoice(player, state)
     self:setVisible(false)
     self:removeFromUIManager()
-    activeDialog = nil
+    state.dialog = nil
 end
 
 function GettingOldBirthdayDialog:new(player)
     local width = 400
     local height = 204
-    local x = (getCore():getScreenWidth() - width) / 2
-    local y = (getCore():getScreenHeight() - height) / 2
+    local index = player:getPlayerNum()
+    local x = getPlayerScreenLeft(index) + (getPlayerScreenWidth(index) - width) / 2
+    local y = getPlayerScreenTop(index) + (getPlayerScreenHeight(index) - height) / 2
     local o = ISPanel.new(self, x, y, width, height)
     o.player = player
     o.backgroundColor = { r = 0, g = 0, b = 0, a = 0.9 }
@@ -91,31 +101,57 @@ function GettingOldBirthdayDialog:new(player)
     return o
 end
 
-local function showBirthdayDialog(player)
-    player = player or getPlayer()
-    if not player or activeDialog then return end
-
-    local md = player:getModData()
-    if md._AgeAssigned then
-        waitingForServer = false
-        return
+local function closeDialog(state)
+    if state and state.dialog then
+        state.dialog:setVisible(false)
+        state.dialog:removeFromUIManager()
+        state.dialog = nil
     end
-
-    if md._GettingOldBirthdayChoicePending then return end
-
-    if AgeConfig.useRandomBirthday() then
-        if isClient() and not waitingForServer then
-            sendClientCommand(MOD_ID, "RequestAgeInit", {})
-            waitingForServer = true
-        end
-        return
-    end
-
-    if waitingForServer then return end
-
-    activeDialog = GettingOldBirthdayDialog:new(player)
-    activeDialog:initialise()
-    activeDialog:addToUIManager()
 end
 
-Events.OnPlayerUpdate.Add(showBirthdayDialog)
+local function updateBirthdayDialog(player, index)
+    local state = states[index]
+    if state and state.player ~= player then closeDialog(state); states[index] = nil; state = nil end
+    if not player or not player:isAlive() then
+        closeDialog(state)
+        states[index] = nil
+        return
+    end
+    if not state then
+        state = { player = player }
+        states[index] = state
+    end
+    local md = player:getModData()
+    if md._AgeAssigned then
+        closeDialog(state)
+        state.month, state.day, state.sentAt = nil, nil, nil
+        return
+    end
+    -- Pending state belongs to this session/character, not a saved global lock.
+    -- Recover a selection made before a save or a delayed server acknowledgement.
+    if not state.month then
+        state.month, state.day = AgeConfig.validateBirthday(md._GettingOldBirthdayMonth, md._GettingOldBirthdayDay)
+        if not state.month and md.birthYear then
+            state.month, state.day = AgeConfig.validateBirthday(md.birthMonth, md.birthDay)
+        end
+    end
+    if AgeConfig.useRandomBirthday() or state.month then
+        closeDialog(state)
+        if not state.sentAt or getTimestampMs() - state.sentAt >= RETRY_MS then submitChoice(player, state) end
+        return
+    end
+    if not state.dialog then
+        state.dialog = GettingOldBirthdayDialog:new(player)
+        state.dialog:initialise()
+        state.dialog:addToUIManager()
+    end
+end
+
+Events.OnTick.Add(function()
+    for index, state in pairs(states) do
+        if getSpecificPlayer(index) ~= state.player then closeDialog(state); states[index] = nil end
+    end
+    for index = 0, getNumActivePlayers() - 1 do
+        updateBirthdayDialog(getSpecificPlayer(index), index)
+    end
+end)

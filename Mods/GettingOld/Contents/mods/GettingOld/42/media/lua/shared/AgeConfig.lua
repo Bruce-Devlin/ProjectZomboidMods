@@ -116,3 +116,19 @@ end
 function AgeConfig.areBirthdayHatsEnabled()
     return sandboxBoolean("EnableBirthdayHats", true)
 end
+
+-- Match actual player slots/connections; NPC mods can also emit player update events.
+function AgeConfig.isHumanPlayer(player)
+    if not player then return false end
+    if isServer() then
+        local players = getOnlinePlayers()
+        for i = 0, players:size() - 1 do
+            if players:get(i) == player then return true end
+        end
+    else
+        for i = 0, getNumActivePlayers() - 1 do
+            if getSpecificPlayer(i) == player then return true end
+        end
+    end
+    return false
+end

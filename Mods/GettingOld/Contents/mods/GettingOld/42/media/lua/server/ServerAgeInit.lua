@@ -1,3 +1,4 @@
+require "AgeClock"
 local GettingOldRegistry = require("GettingOld/Registries")
 local MOD_ID = "GettingOld"
 
@@ -45,6 +46,11 @@ local function finishAgeAssignment(player, birthdayMonth, birthdayDay)
             md.birthMonth, md.birthDay = AgeConfig.getBirthday(md.birthYear)
         end
 
+        local currentMonth, currentDay = gt:getMonth() + 1, gt:getDay() + 1
+        if md.birthMonth > currentMonth or (md.birthMonth == currentMonth and md.birthDay > currentDay) then
+            md.birthYear = md.birthYear - 1
+        end
+
         DevTools.debugLog(
             "Getting Old",
             string.format("Assigned Birthday: %02d/%02d/%04d", md.birthDay, md.birthMonth, md.birthYear)
@@ -55,12 +61,7 @@ local function finishAgeAssignment(player, birthdayMonth, birthdayDay)
     md._GettingOldBirthdayMonth = nil
     md._GettingOldBirthdayDay = nil
 
-    -- Use the player's exact survival time for aging. GameTime days are whole
-    -- numbers, which is too coarse when a configured year is only one day.
-    local yearLength = math.max(AgeConfig.getYearLengthDays(), 1)
-    md.startAge = md.Age
-    md._GettingOldAgeHoursSurvivedAnchor = player:getHoursSurvived()
-    md._GettingOldAgeCycleHoursAtAnchor = (yearLength - 1) * 24
+    if not md._GettingOldAgeHoursSurvivedAnchor then AgeClock.initialize(player) end
 
     AgeSystem.apply(player)
     player:transmitModData()
@@ -69,10 +70,15 @@ end
 
 local function updatePlayer(player)
     player = player or getPlayer()
-    if not player then return end
+    if not AgeConfig.isHumanPlayer(player) or not player:isAlive() then return end
 
     local md = player:getModData()
     if md._AgeAssigned then return end
+
+    if md.birthMonth and md.birthDay and md.birthYear and md.Age then
+        finishAgeAssignment(player, md.birthMonth, md.birthDay)
+        return
+    end
 
     if AgeConfig.useRandomBirthday() then
         finishAgeAssignment(player)
@@ -90,7 +96,10 @@ local function onClientCommand(module, command, player, args)
     if not player or not player:isAlive() then return end
 
     local md = player:getModData()
-    if md._AgeAssigned then return end
+    if md._AgeAssigned then
+        if command == "RequestAgeInit" or command == "SetBirthday" then player:transmitModData() end
+        return
+    end
 
     if command == "RequestAgeInit" and AgeConfig.useRandomBirthday() then
         finishAgeAssignment(player)

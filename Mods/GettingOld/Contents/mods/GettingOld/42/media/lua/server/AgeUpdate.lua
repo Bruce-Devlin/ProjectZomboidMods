@@ -1,4 +1,4 @@
-require "AgeConfig"
+require "AgeClock"
 
 local BIRTHDAY_HAT_CHANCE = 30
 local BIRTHDAY_HAT_ITEM = "Base.Hat_PartyHat_Stars"
@@ -10,6 +10,10 @@ local function syncBirthdayState(player)
 end
 
 local function tryGiveBirthdayHat(player, md, newAge)
+    if isClient() or not player:isAlive() then return false end
+    local inventory = player:getInventory()
+    if not inventory then return false end
+
     if not AgeConfig.areBirthdayHatsEnabled() then
         md._GettingOldBirthdayHatCheckedAge = newAge
         return false
@@ -25,10 +29,11 @@ local function tryGiveBirthdayHat(player, md, newAge)
         return false
     end
 
-    local partyHat = player:getInventory():AddItem(BIRTHDAY_HAT_ITEM)
+    local partyHat = inventory:AddItem(BIRTHDAY_HAT_ITEM)
     if partyHat then
         partyHat:setName(tostring(player:getUsername()) .. "'s " .. tostring(newAge) .. " birthday hat!")
         partyHat:setTooltip("A lucky birthday hat")
+        if isServer() then sendAddItemToContainer(inventory, partyHat) end
         return true
     end
 
@@ -63,99 +68,22 @@ local function playerBirthday(player, oldAge, newAge)
     syncBirthdayState(player)
 end
 
+local function updateAge(player)
+    if not player or not player:isAlive() then return end
+    local md = player:getModData()
+    if not md._AgeAssigned or not md.birthYear or not md.Age then return end
+    local expectedAge = AgeClock.advance(player)
+    if expectedAge > md.Age then playerBirthday(player, md.Age, expectedAge) end
+    AgeSystem.apply(player)
+end
+
 local function checkPlayerAge()
-    DevTools.debugLog("Getting Old", "Updating players age...")
-
-    local gt = getGameTime()
-    local totalDaysNow = gt:getDaysSurvived()
-
-    for i = 0, getNumActivePlayers() - 1 do
-        local tmpPlayer = getSpecificPlayer(i)
-        if not tmpPlayer then return end
-
-        local playerID = tmpPlayer:getOnlineID()
-        local player = getPlayerByOnlineID(playerID)
-        if playerID == 0 then player = getPlayer() end
-        if not player then return end
-
-        local md = player:getModData()
-        if not md.birthYear or not md.Age then return end
-
-        DevTools.debugLog("Getting Old", "Checking player \"" .. tostring(player:getUsername()) .. "\" (age:" .. md.Age .. ") for age update...")
-
-        local yearLength = AgeConfig.getYearLengthDays()
-        if yearLength < 1 then yearLength = 1 end
-
-        if not md._GettingOldAgeHoursSurvivedAnchor then
-            local oldCycleDays
-            if md.birthDayCount then
-                oldCycleDays = math.max(0, totalDaysNow - md.birthDayCount)
-            else
-                md.birthDayCount = totalDaysNow - (yearLength - 1)
-                oldCycleDays = yearLength - 1
-            end
-
-            md.startAge = md.startAge or md.Age
-            md._GettingOldAgeHoursSurvivedAnchor = player:getHoursSurvived()
-            md._GettingOldAgeCycleHoursAtAnchor = oldCycleDays * 24
-
-            DevTools.debugLog("Getting Old",
-                string.format(
-                    "Initialized precise aging: startAge=%d survivedHours=%.2f cycleHours=%.2f yearLength=%d",
-                    md.startAge,
-                    md._GettingOldAgeHoursSurvivedAnchor,
-                    md._GettingOldAgeCycleHoursAtAnchor,
-                    yearLength
-                )
-            )
-        end
-
-        local survivedHours = player:getHoursSurvived()
-        local hoursSinceAnchor = survivedHours - md._GettingOldAgeHoursSurvivedAnchor
-        if hoursSinceAnchor < 0 then
-            DevTools.debugLog("Getting Old", "Negative age hours detected, resetting aging anchor")
-            md._GettingOldAgeHoursSurvivedAnchor = survivedHours
-            hoursSinceAnchor = 0
-        end
-
-        local cycleHours = (tonumber(md._GettingOldAgeCycleHoursAtAnchor) or 0) + hoursSinceAnchor
-        local yearHours = yearLength * 24
-        local yearsPassed = math.floor(cycleHours / yearHours)
-        local expectedAge = md.startAge + yearsPassed
-
-        local hoursIntoYear = cycleHours % yearHours
-        local hoursUntilBirthday = yearHours - hoursIntoYear
-        if hoursUntilBirthday == yearHours then hoursUntilBirthday = 0 end
-
-        DevTools.debugLog(
-            "Getting Old",
-            string.format(
-                "Expected age: %d | Start age: %d | Hours survived: %.2f | Cycle hours: %.2f | Hours until birthday: %.2f",
-                expectedAge,
-                md.startAge,
-                survivedHours,
-                cycleHours,
-                hoursUntilBirthday
-            )
-        )
-
-        local player = getPlayerByOnlineID(playerID)
-        if playerID == 0 then player = getPlayer() end
-        if not player then return end
-
-        if expectedAge > md.Age then
-            playerBirthday(player, md.Age, expectedAge)
-        end
-
-        -- Birthday processing comes first so a terminal old-age update cannot
-        -- kill the player while the UI still displays the previous age.
-        AgeSystem.apply(player)
-
+    if isServer() then
+        local players = getOnlinePlayers()
+        for i = 0, players:size() - 1 do updateAge(players:get(i)) end
+    elseif not isClient() then
+        for i = 0, getNumActivePlayers() - 1 do updateAge(getSpecificPlayer(i)) end
     end
 end
 
-
-
 Events.EveryHours.Add(checkPlayerAge)
-DevTools.debugLog("Getting Old", "Player aging hooked")
-

@@ -1,4 +1,5 @@
 AgeSystem = AgeSystem or {}
+local appliedHair = setmetatable({}, { __mode = "k" })
 local OLD_AGE_DURATION_MIN_FACTOR = 0.9
 local OLD_AGE_DURATION_MAX_FACTOR = 1.1
 local OLD_AGE_WARNINGS = {
@@ -49,7 +50,11 @@ local function getOldAgeDeclineProgress(player, md, age, declineYears, yearLengt
 
     local baseProgress = tonumber(md._GettingOldOldAgeDeclineBaseProgress) or 0
     local elapsedHours = math.max(0, survivedHours - md._GettingOldMarkedForDeathHoursSurvived)
-    local progress = math.min(1, baseProgress + elapsedHours / (yearLength * 24 * declineYears))
+    local oldLength = md._GettingOldDeclineYearLengthDays or yearLength
+    local progress = math.min(1, baseProgress + elapsedHours / (oldLength * 24 * declineYears))
+    md._GettingOldMarkedForDeathHoursSurvived = survivedHours
+    md._GettingOldOldAgeDeclineBaseProgress = progress
+    md._GettingOldDeclineYearLengthDays = yearLength
     local previousProgress = tonumber(md._GettingOldOldAgeDeclineProgress) or baseProgress
 
     md._GettingOldOldAgeDeclineProgress = progress
@@ -70,6 +75,7 @@ local function announceOldAgeWarning(player, md, progress)
 
     md._GettingOldOldAgeWarningStage = reachedStage
     DevTools.saySafe(player, getText(OLD_AGE_WARNINGS[reachedStage].text))
+    DevTools.ageWarning(player, "UI_GettingOld_OldAge_Cause")
     DevTools.debugLog(
         "Getting Old",
         string.format("Old age warning stage %d at %.1f%% decline", reachedStage, progress * 100)
@@ -101,10 +107,11 @@ function AgeSystem.updatePlayerHair(player)
         greyFactor = math.min((age - 30) / 50, 1.0)
     end
 
-    if md.lastGreyFactor and math.abs(md.lastGreyFactor - greyFactor) < 0.01 then
+    if appliedHair[player] and math.abs(appliedHair[player] - greyFactor) < 0.01 then
         return
     end
     md.lastGreyFactor = greyFactor
+    appliedHair[player] = greyFactor
 
     local r = md.baseHairColor.r + (1.0 - md.baseHairColor.r) * greyFactor
     local g = md.baseHairColor.g + (1.0 - md.baseHairColor.g) * greyFactor
@@ -171,6 +178,10 @@ local function applyOldAgeHealthDecline(player, md, age)
     local targetBodyHealth = math.min(bodyHealth, nextPlayerHealth * 100)
 
     announceOldAgeWarning(player, md, declineProgress)
+    if healthDecay > 0 and (nextPlayerHealth <= 0 or targetBodyHealth <= 0) and not md._GettingOldTerminalWarning then
+        md._GettingOldTerminalWarning = true
+        DevTools.ageWarning(player, "UI_GettingOld_OldAge_Cause")
+    end
     if declineProgress >= 1 or healthDecay > 0 then
         -- This persistent general-health value drives the native Health panel.
         -- It is also reconciled with the existing player-health decline so an

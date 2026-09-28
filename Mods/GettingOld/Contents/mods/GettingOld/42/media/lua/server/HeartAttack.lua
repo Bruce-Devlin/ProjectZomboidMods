@@ -38,7 +38,7 @@ local function startHeartAttack(player, md, age, stress, panic, chance)
     md._GettingOldHeartAttackStartedAt = getTimestampMs()
     md._GettingOldDeathCause = "HeartAttack"
     player:transmitModData()
-    DevTools.saySafe(player, getText("UI_GettingOld_HeartAttack_Speech"))
+    if not isServer() then DevTools.saySafe(player, getText("UI_GettingOld_HeartAttack_Speech")) end
 
     DevTools.debugLog(
         "Getting Old",

@@ -18,6 +18,10 @@ local function startEffects(player, playerIndex, attackId)
     }
     activeAttacks[playerIndex] = state
 
+    if isClient() then
+        DevTools.saySafe(player, getText("UI_GettingOld_HeartAttack_Speech"))
+    end
+
     if HaloTextHelper then
         HaloTextHelper.addBadText(player, getText("UI_GettingOld_HeartAttack_Warning"))
     end
@@ -57,5 +61,19 @@ end
 Events.OnTick.Add(function()
     for playerIndex = 0, getNumActivePlayers() - 1 do
         updateEffects(getSpecificPlayer(playerIndex), playerIndex)
+    end
+end)
+
+Events.OnServerCommand.Add(function(module, command, args)
+    if module ~= "GettingOld" or not args then return end
+    for index = 0, getNumActivePlayers() - 1 do
+        local player = getSpecificPlayer(index)
+        if player and player:getOnlineID() == args.onlineID then
+            if command == "AgeWarning" and args.textKey == "UI_GettingOld_OldAge_Cause" and HaloTextHelper then
+                HaloTextHelper.addBadText(player, getText(args.textKey))
+            elseif command == "Speech" and type(args.text) == "string" then
+                player:addLineChatElement(args.text)
+            end
+        end
     end
 end)

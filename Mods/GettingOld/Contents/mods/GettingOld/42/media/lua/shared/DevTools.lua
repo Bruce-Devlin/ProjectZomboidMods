@@ -15,8 +15,8 @@ end
 function DevTools.saySafe(player, text)
     if not player then return end
 
-    if isClient() then
-        sendClientCommand("chat", "sendPlayerSay", { text = text })
+    if isServer() then
+        sendServerCommand(player, "GettingOld", "Speech", { text = text, onlineID = player:getOnlineID() })
     else
         player:addLineChatElement(text)
     end
@@ -95,4 +95,13 @@ function DevTools.waitUntilNotNil(condition, id)
     end
 
     Events.OnTick.Add(delayedActions)
+end
+
+-- Deliver cause text to the owning client as well as singleplayer.
+function DevTools.ageWarning(player, textKey)
+    if isServer() then
+        sendServerCommand(player, "GettingOld", "AgeWarning", { textKey = textKey, onlineID = player:getOnlineID() })
+    elseif HaloTextHelper then
+        HaloTextHelper.addBadText(player, getText(textKey))
+    end
 end
