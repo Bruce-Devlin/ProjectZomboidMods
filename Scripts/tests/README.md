@@ -10,7 +10,8 @@ The harness runs production Lua with mocked game APIs. It covers calendar annive
 leap years, custom aging intervals, changes to custom year length, legacy progress,
 NPC exclusion, per-character birthday dialogs, retry/acknowledgement handling,
 server validation, reload greying, server player enumeration, hat replication and
-warning ownership. It does not establish game-engine or mod compatibility.
+warning ownership, and the real age-effects path with B42 human visual replication
+and no `transmitVisual` player method. It does not establish game-engine or mod compatibility.
 
 ## Timing contract
 

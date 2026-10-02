@@ -187,6 +187,32 @@ AgeSystem.updatePlayerHair(p)
 assert(updates == 1, "restore once per loaded character, not every update")
 print("PASS: NPC exclusion, per-player dialogs, retries, server validation, reload hair restoration")
 
+-- B42 server players have no transmitVisual method. Run the real apply path
+-- for multiple players so a visual-sync error cannot abort the hourly loop.
+server = true
+SandboxVars.GettingOld.DeadlyAge = 0
+CharacterStat = { ENDURANCE="endurance", FATIGUE="fatigue", PAIN="pain", STRESS="stress" }
+AgeSystem.getGroup = function() return "Middle" end
+local visualSyncs = {}
+function sendHumanVisual(target) visualSyncs[#visualSyncs + 1] = target end
+local effectPlayers = {p, player(1)}
+effectPlayers[2].md = {Age=55, baseHairColor={r=0.2,g=0.2,b=0.2}}
+for _, target in ipairs(effectPlayers) do
+    function target:getHumanVisual() return visual end
+    function target:resetModelNextFrame() end
+    function target:getStats() return {get=function() return 0 end} end
+    assert(target.transmitVisual == nil)
+    local syncsBefore = target.syncs
+    AgeSystem.apply(target)
+    assert(target.syncs == syncsBefore + 1, "age mod data must still be replicated")
+end
+assert(#visualSyncs == 2 and visualSyncs[1] == p and visualSyncs[2] == effectPlayers[2])
+server = false
+AgeSystem.apply(p)
+assert(#visualSyncs == 2, "singleplayer must not send server visual updates")
+SandboxVars.GettingOld.DeadlyAge = nil
+print("PASS: real age effects use B42 human visual sync for each server player")
+
 -- Dedicated-server aging visits every connected player and replicates each awarded item once.
 resetEvents()
 server = true

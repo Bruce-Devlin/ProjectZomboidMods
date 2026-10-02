@@ -256,7 +256,7 @@ function AgeSystem.apply(player)
 
     if isServer() then
         player:transmitModData()
-        player:transmitVisual()
+        sendHumanVisual(player)
     end
 
     DevTools.debugLog("Getting Old",
