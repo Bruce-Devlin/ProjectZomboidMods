@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animNode>
+    <m_Name>ProjectPeople_Backstep</m_Name>
+    <m_AnimName>Bob_WalkBwdAim1Hand</m_AnimName>
+    <m_ConditionPriority>150</m_ConditionPriority>
+    <m_BlendTime>0.15</m_BlendTime>
+    <m_SpeedScale>0.85</m_SpeedScale>
+    <m_Conditions><m_Name>ProjectPeopleActor</m_Name><m_Type>BOOL</m_Type><m_Value>true</m_Value></m_Conditions>
+    <m_Conditions><m_Name>ProjectPeopleRetreat</m_Name><m_Type>BOOL</m_Type><m_Value>true</m_Value></m_Conditions>
+</animNode>

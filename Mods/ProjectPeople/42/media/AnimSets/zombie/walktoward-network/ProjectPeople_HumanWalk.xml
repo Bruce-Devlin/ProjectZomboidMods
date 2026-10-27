@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animNode>
+    <m_Name>ProjectPeople_HumanWalk</m_Name>
+    <m_AnimName>Bob_Walk</m_AnimName>
+    <m_ConditionPriority>100</m_ConditionPriority>
+    <m_BlendTime>0.20</m_BlendTime>
+    <m_SpeedScale>1.04</m_SpeedScale>
+    <m_Conditions>
+        <m_Name>ProjectPeopleActor</m_Name>
+        <m_Type>BOOL</m_Type>
+        <m_Value>true</m_Value>
+    </m_Conditions>
+    <m_Events>
+        <m_EventName>Footstep</m_EventName>
+        <m_TimePc>0.20</m_TimePc>
+        <m_ParameterValue>walk</m_ParameterValue>
+    </m_Events>
+    <m_Events>
+        <m_EventName>Footstep</m_EventName>
+        <m_TimePc>0.65</m_TimePc>
+        <m_ParameterValue>walk</m_ParameterValue>
+    </m_Events>
+</animNode>

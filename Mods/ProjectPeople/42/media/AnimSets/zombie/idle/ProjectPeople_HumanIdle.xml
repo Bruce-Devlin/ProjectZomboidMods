@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animNode>
+    <m_Name>ProjectPeople_HumanIdle</m_Name>
+    <m_AnimName>Bob_Idle</m_AnimName>
+    <m_ConditionPriority>100</m_ConditionPriority>
+    <m_BlendTime>0.20</m_BlendTime>
+    <m_SpeedScale>0.48</m_SpeedScale>
+    <m_Conditions>
+        <m_Name>ProjectPeopleActor</m_Name>
+        <m_Type>BOOL</m_Type>
+        <m_Value>true</m_Value>
+    </m_Conditions>
+</animNode>

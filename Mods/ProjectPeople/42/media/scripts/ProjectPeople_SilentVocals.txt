@@ -1,0 +1,71 @@
+// Original names used only by Project People actors. Existing engine events
+// supply valid clips; zero clip gain suppresses automatic zombie vocal loops.
+// No vanilla sound definition is replaced.
+module Base
+{
+    sound ProjectPeopleSilentVoiceA
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentVoiceB
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentVoiceC
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentSprinterVoiceA
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentSprinterVoiceB
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentSprinterVoiceC
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentBiteA
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentBiteB
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentBiteC
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentSprinterBiteA
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentSprinterBiteB
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentSprinterBiteC
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+    sound ProjectPeopleSilentHurt
+    {
+        category = ProjectPeople,
+        clip { event = Zombie/Voice/MaleA, volume = 0.0, }
+    }
+}
