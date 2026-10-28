@@ -333,7 +333,7 @@ function Combat.new(config)
                     end
                 end
                 hit = config.random() < strike.profile.accuracy
-                damage = hit and strike.profile.damage or 0
+                damage = hit and (target.kind == "zombie" and strike.profile.zombieDamage or strike.profile.damage) or 0
                 -- Retain the established player advantage and bounded damage.
                 if target.kind == "player" then
                     damage = math.min(0.1, damage * 0.2)

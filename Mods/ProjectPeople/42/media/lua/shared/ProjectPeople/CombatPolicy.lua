@@ -4,7 +4,7 @@ local Policy = { VERSION = 1, HOSTILE_PERCENT = 3, NOTICE_RADIUS = 12, MELEE_REA
 local matchups = {
     player = { damage = 0.06, accuracy = 0.45, windupMs = 1200, cooldownMs = 2600 },
     npc = { damage = 0.18, accuracy = 0.65, windupMs = 850, cooldownMs = 1800 },
-    zombie = { damage = 0.45, accuracy = 0.82, windupMs = 650, cooldownMs = 1400 },
+    zombie = { damage = 0.50, accuracy = 0.82, windupMs = 650, cooldownMs = 1400 },
 }
 
 function Policy.matchup(kind)
