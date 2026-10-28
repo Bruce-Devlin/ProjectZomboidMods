@@ -3,6 +3,28 @@
 -- clips instead. No coordinates, collision flags or world tiles are rewritten.
 local Fences = {}
 
+function Fences.prepare(actor, record)
+    if record.mode ~= "move" or not actor:isLocal() or actor:getVariableBoolean "ClimbingFence" then
+        return
+    end
+    local from = actor:getCurrentSquare()
+    if not from or not from.getHoppableTo then
+        return
+    end
+    -- Native running-vault admission reads player BodyDamage (nil on these
+    -- bodies). Enter low fences at walking speed, retaining our upright clip.
+    for _, d in ipairs({ { 1, 0 }, { -1, 0 }, { 0, 1 }, { 0, -1 } }) do
+        local to = getCell():getGridSquare(from:getX() + d[1], from:getY() + d[2], from:getZ())
+        if to and from:getHoppableTo(to) then
+            actor:setRunning(false)
+            actor:setSprinting(false)
+            actor:setVariable("VaultOverRun", false)
+            actor:setVariable("VaultOverSprint", false)
+            return
+        end
+    end
+end
+
 local function ownMotion(actor)
     if not actor:getVariableBoolean "ProjectPeopleTallMotionOwned" then
         actor:setVariable("ProjectPeopleDeferredBeforeTall", actor:isDeferredMovementEnabled())

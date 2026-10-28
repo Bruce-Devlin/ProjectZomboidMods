@@ -248,6 +248,9 @@ local function serverCommand(module, kind, p, a)
     if module ~= Encounter.MODULE or not p or type(a) ~= "table" then
         return
     end
+    if not require("ProjectPeople/DebugAccess").allowed(p) then
+        return
+    end
     if kind == "sync" then
         publish(p)
         return

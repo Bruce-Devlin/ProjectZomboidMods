@@ -1,5 +1,23 @@
 VERSION = 1,
 
+option ProjectPeople.ActiveFollowerLimit
+{
+    type = integer,
+    min = 1,
+    max = 40,
+    default = 3,
+    page = ProjectPeople,
+    translation = ProjectPeople_ActiveFollowerLimit,
+}
+
+option ProjectPeople.DebugEnabled
+{
+    type = boolean,
+    default = false,
+    page = ProjectPeople,
+    translation = ProjectPeople_DebugEnabled,
+}
+
 option ProjectPeople.PopulationEnabled
 {
     type = boolean,
@@ -108,4 +126,14 @@ option ProjectPeople.RecoveryRate
     default = 1.0,
     page = ProjectPeople,
     translation = ProjectPeople_RecoveryRate,
+}
+
+option ProjectPeople.TrustGainMultiplier
+{
+    type = double,
+    min = 0.0,
+    max = 10.0,
+    default = 1.0,
+    page = ProjectPeople,
+    translation = ProjectPeople_TrustGainMultiplier,
 }

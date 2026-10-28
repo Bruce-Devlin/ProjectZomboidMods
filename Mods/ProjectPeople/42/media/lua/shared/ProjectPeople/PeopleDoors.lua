@@ -62,7 +62,7 @@ local function groupAvailable(door)
             if not part then
                 return true
             end
-            if not Doors.available(part) then
+            if not Doors.available(part) or part:isObstructed() then
                 return false
             end
             part = IsoDoor.getGarageDoorNext(part)
@@ -100,9 +100,8 @@ function Doors.setOpen(actor, door, wanted)
         end
         IsoDoor.toggleDoubleDoor(door, true)
     elseif IsoDoor.getGarageDoorIndex(door) ~= -1 then
-        if IsoDoor.isGarageDoorObstructed(door) then
-            return false, "door_blocked"
-        end
+        -- The native garage obstruction helper is private. groupAvailable
+        -- checks every leaf with the public obstruction API before toggling.
         IsoDoor.toggleGarageDoor(door, true)
     else
         -- 42.21 ToggleDoorActual dereferences a null IsoPlayer after changing
@@ -169,12 +168,12 @@ function Doors.update(binding, record, now)
                     binding.closedDoorUntil = now + 1000
                     return
                 end
-            elseif not reachable(actor, door) then
+            elseif (actor:getX() - sq:getX() - 0.5) ^ 2 + (actor:getY() - sq:getY() - 0.5) ^ 2 > 3 ^ 2 then
                 binding.doorPassage = nil
             end
         end
     end
-    if record.mode ~= "move" or record.attacking or binding.doorPassage then
+    if record.mode ~= "move" or record.attacking then
         return
     end
     local current = actor:getCurrentSquare()

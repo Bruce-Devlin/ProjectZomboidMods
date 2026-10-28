@@ -6,6 +6,7 @@ local Equipment = require "ProjectPeople/PeopleEquipment"
 local Locomotion = require "ProjectPeople/Pathing/Locomotion"
 local Doors = require "ProjectPeople/PeopleDoors"
 local Fences = require "ProjectPeople/PeopleFences"
+local Windows = require "ProjectPeople/PeopleWindows"
 local Body = { VERSION = 1 }
 -- Native multiplayer zombie IDs are signed; only -1 means unassigned/SP.
 
@@ -33,6 +34,7 @@ function Body.attach(actor, record)
     -- Native ReanimatedPlayers saves the actual body, original inventory and
     -- ModData to reanimated.bin and restores it when its chunk loads.
     actor:setReanimatedPlayer(true)
+    Visual.sanitize(actor)
     if not isClient or not isClient() then
         Clothing.initialise(actor)
         record.clothing = Clothing.snapshot(actor)
@@ -88,11 +90,19 @@ function Body.recover(person, worldId)
     return Body.attach(found, record), record
 end
 
-function Body.create(person, location)
+function Body.create(person, location, outbreakDays)
     assert(not isClient(), "authority_only")
     local actor = createZombie(math.floor(location.x), math.floor(location.y), location.z, nil, 0, IsoDirections.S)
     assert(actor, "native_factory_returned_no_body")
+    local existing = actor:getModData().ProjectPeoplePersonId
+    assert(not existing or existing == person.id, "native_body_already_bound")
     actor:setHealth(1)
+    -- Birth equipment emits native equip events before attach. Tag the actual
+    -- person first so the NPC-only guard excludes player-only fishing handlers.
+    actor:getModData().ProjectPeoplePersonId = person.id
+    if person.populationGroup then
+        require("ProjectPeople/Population/Equipment").initialise(actor, person, outbreakDays or 0)
+    end
     local record = {
         personId = person.id,
         name = person.name,
@@ -149,8 +159,31 @@ function Body.update(binding, record)
     actor:setNoTeeth(true)
     actor:setTarget(nil)
     local localOwner = actor:isLocal()
+    if Windows.update(binding, record) then
+        binding.wasLocal = localOwner
+        return
+    end
     Locomotion.apply(actor, record)
+    Fences.prepare(actor, record)
     actor:setVariable("ProjectPeopleSwing", record.attacking == true)
+    actor:setHideWeaponModel(
+        record.mode == "wait"
+            and record.homePose ~= nil
+            and not record.combatActive
+            and not record.attacking
+            and not record.fleeing
+    )
+    actor:setVariable(
+        "ProjectPeopleHomePose",
+        record.mode == "wait"
+                and not record.attacking
+                and not record.combatActive
+                and not record.fleeing
+                and record.homePose
+            or ""
+    )
+    actor:setVariable("ProjectPeopleShove", record.attacking == true and record.attackAction == "shove")
+    actor:setVariable("ProjectPeopleStomp", record.attacking == true and record.attackAction == "stomp")
     actor:setVariable("ProjectPeopleSwingWalkBlend", 0.4)
     actor:setVariable("ProjectPeopleSwingWalkBlendY", 0.1)
     if not record.attacking then
@@ -170,11 +203,30 @@ function Body.update(binding, record)
     if traversing then
         return
     end
+    if Windows.assist(binding, record) then
+        binding.wasLocal = localOwner
+        return
+    end
     Doors.update(binding, record)
     if localOwner and (binding.epoch ~= record.epoch or not binding.wasLocal) then
-        Body.stop(actor)
-        binding.epoch = record.epoch
-        binding.pendingPath = record.mode == "move" and record.epoch or nil
+        local state = actor.getCurrentStateName and tostring(actor:getCurrentStateName()):lower() or ""
+        if
+            binding.wasLocal
+            and record.mode == "move"
+            and (record.duty == "follow" or record.homeActive)
+            and (state:find("pathfind", 1, true) or state:find("walktoward", 1, true))
+        then
+            -- Retarget inside the same native state. Stopping first adds an
+            -- idle frame and cancels the new request on every short footprint.
+            actor:pathToLocationF(record.goalX, record.goalY, record.goalZ)
+            actor:setVariable("bPathfind", true)
+            binding.epoch = record.epoch
+            binding.pendingPath = nil
+        else
+            Body.stop(actor)
+            binding.epoch = record.epoch
+            binding.pendingPath = record.mode == "move" and record.epoch or nil
+        end
     elseif localOwner and binding.pendingPath == record.epoch and record.mode == "move" then
         -- PathFindState.exit cancels native requests. Let the stopped state
         -- leave before issuing a subsequent route, otherwise its exit can

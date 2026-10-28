@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<animNode>
+    <m_Name>ProjectPeople_Home_sit</m_Name>
+    <m_AnimName>Bob_SitGround_Idle</m_AnimName>
+    <m_ConditionPriority>125</m_ConditionPriority>
+    <m_BlendTime>0.25</m_BlendTime>
+    <m_Looped>true</m_Looped>
+    <m_Conditions><m_Name>ProjectPeopleActor</m_Name><m_Type>BOOL</m_Type><m_Value>true</m_Value></m_Conditions>
+    <m_Conditions><m_Name>ProjectPeopleHomePose</m_Name><m_Type>STRING</m_Type><m_Value>sit</m_Value></m_Conditions>
+</animNode>

@@ -8,6 +8,8 @@ local Population = require "ProjectPeople/Population/Rules"
 local Trust = require "ProjectPeople/Behaviour/Trust"
 local SocialGroup = require "ProjectPeople/Behaviour/Groups"
 local FriendlyFire = require "ProjectPeople/FriendlyFire"
+local Party = require "ProjectPeople/Party"
+local HomeRoles = require "ProjectPeople/HomeRoles"
 ProjectPeople.Core = Core
 local jobPhases = {
     prepared = true,
@@ -270,6 +272,12 @@ function Core.restore(snapshot)
     end
     local actors = {}
     for id, personRecord in pairs(restored.people) do
+        if not HomeRoles.valid(personRecord.homeWork) then
+            return nil, "invalid_home_work"
+        end
+        if personRecord.communityHome ~= nil and not Party.home(personRecord.communityHome) then
+            return nil, "invalid_community_home"
+        end
         if personRecord.friendlyFire ~= nil and type(personRecord.friendlyFire) ~= "boolean" then
             return nil, "invalid_friendly_fire"
         end
@@ -426,7 +434,7 @@ local function decidePerson(world, personId, actorId, request, risk)
         return false, personalReason
     end
     if request == "resident" then
-        if not personRecord.communityId then
+        if not Party.home(actor.communityHome) then
             return false, "home_required"
         end
         if rel.trust < Trust.requirement(personRecord, "resident") then
@@ -460,7 +468,7 @@ local function decidePerson(world, personId, actorId, request, risk)
     return true, "travel_agreed"
 end
 
-function Core.decide(world, personId, actorId, request, risk)
+function Core.decide(world, personId, actorId, request, risk, followerLimit)
     local accepted, reason = decidePerson(world, personId, actorId, request, risk)
     if not accepted or (request ~= "travel" and request ~= "resident") then
         return accepted, reason
@@ -469,9 +477,15 @@ function Core.decide(world, personId, actorId, request, risk)
         if id ~= personId then
             local willing, why = decidePerson(world, id, actorId, request, risk)
             if not willing then
-                return false, "group_not_ready", why
+                return false, "group_not_ready", why, id
             end
         end
+    end
+    if
+        request == "travel"
+        and not Party.fits(world, actorId, SocialGroup.members(world, personId, true), followerLimit)
+    then
+        return false, "follower_limit"
     end
     return true, reason
 end
@@ -728,6 +742,38 @@ handlers["people.checkpoint"] = function(world, command, context)
 end
 
 -- Communities and cooperation
+handlers["community.home.set"] = function(world, command, context)
+    local actor = person(world, context.actorId)
+    local proof = evidence(context, "community_home")
+    local point = { x = command.x, y = command.y, z = command.z }
+    if not actor or actor.controller.kind ~= "player" or actor.life ~= "alive" then
+        return fail "not_authorised"
+    end
+    if
+        not Party.home(point)
+        or not proof
+        or proof.actorId ~= actor.id
+        or not proof.safe
+        or proof.x ~= point.x
+        or proof.y ~= point.y
+        or proof.z ~= point.z
+    then
+        return fail "home_location_unconfirmed"
+    end
+    actor.communityHome = copy(point)
+    touch(actor)
+    for _, member in pairs(world.people) do
+        if member.commanderId == actor.id and member.recruited and member.duty == "base" then
+            member.home = copy(point)
+            touch(member)
+        end
+    end
+    return success("community_home_set", { message = "Community home set. Your people will return here." })
+end
+
+handlers["home.role.set"] = HomeRoles.assign
+handlers["home.observe"] = HomeRoles.observe
+
 handlers["community.create"] = function(world, command, context)
     if not context.system then
         return fail "system_only"
@@ -781,6 +827,38 @@ handlers["family.link"] = function(world, command, context)
     return success "family_linked"
 end
 
+handlers["trust.reward"] = function(world, command, context)
+    local proof = evidence(context, "trust_reward")
+    if
+        not context.system
+        or not proof
+        or proof.personId ~= command.personId
+        or proof.actorId ~= command.sourcePersonId
+        or proof.reward ~= command.reward
+    then
+        return fail "trust_reward_unconfirmed"
+    end
+    local p, actor = person(world, command.personId), person(world, command.sourcePersonId)
+    if
+        not p
+        or not actor
+        or p.controller.kind ~= "ai"
+        or actor.controller.kind ~= "player"
+        or p.life ~= "alive"
+        or actor.life ~= "alive"
+        or p.reservationId
+        or p.transitionId
+    then
+        return fail "person_unavailable"
+    end
+    local gained = Trust.reward(p, actor.id, command.reward, context.gameTime)
+    if gained == nil then
+        return fail "unknown_trust_reward"
+    end
+    touch(p)
+    return success("trust_reward_recorded", { trustGained = gained })
+end
+
 handlers["social.event"] = function(world, command, context)
     if not context.system or not evidence(context, "social_event") then
         return fail "event_unconfirmed"
@@ -807,7 +885,9 @@ handlers["social.event"] = function(world, command, context)
         return success "event_already_recorded"
     end
     rel.trust, rel.affection, rel.respect =
-        clamp(rel.trust + effect[1]), clamp(rel.affection + effect[2]), clamp(rel.respect + effect[3])
+        clamp(rel.trust + effect[1] * (effect[1] > 0 and Trust.rate() or 1)),
+        clamp(rel.affection + effect[2]),
+        clamp(rel.respect + effect[3])
     rel.anchors[command.eventId] = { event = command.event, relatedId = command.relatedId, gameTime = context.gameTime }
     Mind.social(personRecord, command.event, command.actorId, command.eventId, context.gameTime, command.relatedId)
     touch(personRecord)
@@ -829,7 +909,8 @@ handlers["cooperation.request"] = function(world, command, context)
     then
         return fail "conversation_unconfirmed"
     end
-    local accepted, reason = Core.decide(world, command.personId, context.actorId, command.request)
+    local accepted, reason =
+        Core.decide(world, command.personId, context.actorId, command.request, nil, context.followerLimit)
     if not accepted then
         return fail(reason)
     end
@@ -853,9 +934,11 @@ handlers["cooperation.request"] = function(world, command, context)
                 world.parties[personRecord.partyId].members[personRecord.id] = nil
             end
             personRecord.partyId, personRecord.duty = nil, "base"
+            personRecord.home = copy(actor.communityHome)
         end
         touch(personRecord)
     end
+    HomeRoles.balance(world)
     return success(reason, { members = members })
 end
 
@@ -915,8 +998,14 @@ handlers["duty.set"] = function(world, command, context)
     end
     local members = SocialGroup.members(world, personRecord.id, true)
     if command.duty == "base" or command.duty == "follow" then
-        local accepted, reason =
-            Core.decide(world, personRecord.id, actor.id, command.duty == "base" and "resident" or "travel")
+        local accepted, reason = Core.decide(
+            world,
+            personRecord.id,
+            actor.id,
+            command.duty == "base" and "resident" or "travel",
+            nil,
+            context.followerLimit
+        )
         if not accepted then
             return fail(reason)
         end
@@ -939,8 +1028,16 @@ handlers["duty.set"] = function(world, command, context)
     for _, id in ipairs(members) do
         local member = person(world, id)
         member.duty = command.duty
+        if command.duty == "base" then
+            member.home = copy(actor.communityHome)
+            if member.partyId and world.parties[member.partyId] then
+                world.parties[member.partyId].members[id] = nil
+            end
+            member.partyId = nil
+        end
         touch(member)
     end
+    HomeRoles.balance(world)
     return success "duty_requested"
 end
 
@@ -2015,6 +2112,7 @@ handlers["behaviour.observe"] = Behaviour.advance
 handlers["behaviour.interact"] = Behaviour.interact
 handlers["behaviour.event"] = Behaviour.event
 Population.install(handlers, makePerson)
+require("ProjectPeople/DebugRules").install(handlers, makePerson)
 
 function Core.apply(world, suppliedCommand, suppliedContext)
     local context = suppliedContext or {}

@@ -46,7 +46,7 @@ function Panel:action(button)
 end
 
 function Encounter.openDevelopment()
-    if not isClient() then
+    if not isClient() or not require("ProjectPeople/DebugAccess").allowed(getSpecificPlayer(0)) then
         return
     end
     if Encounter.panel then
@@ -74,7 +74,12 @@ function Encounter.openDevelopment()
     Encounter.panel = panel
 end
 Events.OnFillWorldObjectContextMenu.Add(function(playerIndex, context, worldObjects, test)
-    if test or not isClient() then
+    if
+        test
+        or playerIndex ~= 0
+        or not isClient()
+        or not require("ProjectPeople/DebugAccess").allowed(getSpecificPlayer(0))
+    then
         return
     end
     context:addOption("Project People [Development]: NPC encounter", nil, function()

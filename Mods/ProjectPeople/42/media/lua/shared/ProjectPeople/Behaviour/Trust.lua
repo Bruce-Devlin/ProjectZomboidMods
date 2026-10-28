@@ -3,9 +3,57 @@ local DevTools = require "ProjectPeople/DevTools"
 local Trust = {}
 local isFinite = DevTools.isFinite
 
+function Trust.rate()
+    local value = SandboxVars and SandboxVars.ProjectPeople and SandboxVars.ProjectPeople.TrustGainMultiplier
+    if not isFinite(value) then
+        return 1
+    end
+    return math.max(0, math.min(10, value))
+end
+
+function Trust.gain(rel, amount)
+    local before = rel.trust or 0
+    rel.trust = math.min(100, before + math.max(0, amount) * Trust.rate())
+    return rel.trust - before
+end
+
+local rewards = { conversation = { 2, 1 }, combat = { 3, 1 / 6 }, healing = { 5, 1 / 6 }, gift = { 5, 1 } }
+function Trust.reward(p, visitor, kind, now)
+    local reward = rewards[kind]
+    if not reward or not isFinite(now) then
+        return nil
+    end
+    local rel = p.relationships[visitor] or { trust = 0, affection = 0, respect = 0, fear = 0, anchors = {} }
+    p.relationships[visitor] = rel
+    rel.anchors = rel.anchors or {}
+    local key = "trustReward:" .. kind
+    local last = rel.anchors[key]
+    if last and now - last.at < reward[2] then
+        return 0
+    end
+    if kind == "conversation" and ((rel.fear or 0) >= 60 or rel.anchors["threat:" .. visitor]) then
+        return 0
+    end
+    rel.anchors[key] = { at = now }
+    return Trust.gain(rel, reward[1])
+end
+
+function Trust.record(authority, personId, actorId, kind, now)
+    now = now or (getGameTime and getGameTime():getWorldAgeHours())
+    local p = authority:snapshot().people[personId]
+    local rel = p and p.relationships[actorId]
+    local last = rel and rel.anchors and rel.anchors["trustReward:" .. kind]
+    if rewards[kind] and last and now and now - last.at < rewards[kind][2] then
+        return { ok = true, trustGained = 0 }
+    end
+    return authority:applySystem("trust.reward", { personId = personId, sourcePersonId = actorId, reward = kind }, {
+        evidence = { kind = "trust_reward", validated = true, personId = personId, actorId = actorId, reward = kind },
+    })
+end
+
 function Trust.requirement(p, request)
     local preferences = p.preferences or {}
-    if p.populationGroup then
+    if p.populationGroup and preferences.authoredCooperation ~= true then
         -- Applies to existing regional people too. Authored household contracts
         -- retain their explicit thresholds. Four in five generated identities
         -- consider a trial journey without an existing relationship.
@@ -36,7 +84,7 @@ function Trust.summary(p, visitor)
         travelHours = travel and travel.hours or 0,
         guidance = value < 0 and "Trust has been damaged. Words alone will not repair it."
             or value < Trust.requirement(p, "travel") and "They need a reason to trust you before they will travel. Respect their decision."
-            or "Keep travelling together to build trust. Talking or waiting in place does not earn travel trust.",
+            or "Build trust by talking, fighting together, treating injuries, giving gifts and travelling together.",
     }
 end
 
@@ -114,7 +162,7 @@ function Trust.observe(world, p, seen, now)
     end
     travel.hours = math.min(6, travel.hours + math.min(1 / 6, now - prior.at))
     local earned = math.min(30, math.floor(travel.hours * 5 + 0.00001))
-    rel.trust = math.min(100, rel.trust + math.max(0, earned - travel.earned))
+    Trust.gain(rel, math.max(0, earned - travel.earned))
     travel.earned = earned
 end
 return Trust

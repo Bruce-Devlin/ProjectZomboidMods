@@ -4,7 +4,9 @@ local DevTools = require "ProjectPeople/DevTools"
 local Core = require "ProjectPeople/Core"
 local Codec = require "ProjectPeople/Codec"
 local Journal = require "ProjectPeople/Journal"
-local Defaults = require "ProjectPeople/Content/Household"
+local ReedHousehold = require "ProjectPeople/Content/ReedHousehold"
+local DebugRules = require "ProjectPeople/DebugRules"
+local Party = require "ProjectPeople/Party"
 local Authority = { VERSION = 1 }
 
 local function fail(code, detail)
@@ -24,6 +26,8 @@ local function fields(list)
     return result
 end
 local requests = {
+    ["home.role.set"] = fields "personId role",
+    ["community.home.set"] = fields "x y z",
     ["friendly_fire.set"] = fields "personId enabled",
     ["behaviour.interact"] = fields "personId topic",
     ["cooperation.request"] = fields "personId request",
@@ -33,6 +37,8 @@ local requests = {
     ["mission.recall"] = fields "missionId",
 }
 local observations = {
+    ["home.observe"] = true,
+    ["trust.reward"] = true,
     ["population.observe"] = true,
     ["population.birth"] = true,
     ["person.discover"] = true,
@@ -240,6 +246,7 @@ function Authority.open(config)
                 gameTime = time(),
                 evidence = proof and proof.evidence,
                 capabilities = proof and proof.capabilities,
+                followerLimit = Party.limit(config.followerLimit and config.followerLimit()),
             }
         end
         local function persist(snapshot, stage, operationId)
@@ -378,7 +385,7 @@ function Authority.open(config)
                 end
                 if
                     kind == "mission.propose"
-                    and (type(clean.participants) ~= "table" or #clean.participants > Defaults.MAX_PARTICIPANTS)
+                    and (type(clean.participants) ~= "table" or #clean.participants > ReedHousehold.MAX_PARTICIPANTS)
                 then
                     return fail "bounded_participants_required"
                 end
@@ -393,6 +400,7 @@ function Authority.open(config)
                     kind == "cooperation.request"
                     or kind == "behaviour.interact"
                     or kind == "friendly_fire.set"
+                    or kind == "community.home.set"
                 )
                         and observe(kind, clean, identity, caller)
                     or nil
@@ -413,6 +421,36 @@ function Authority.open(config)
                     return fail "native_observation_required"
                 end
                 return apply(kind, clean, context(nil, true, proof))
+            end)
+        end
+        -- Debug requests have their own authenticated path; no client proof is accepted.
+        function self:debug(caller, kind, data, expectedRevision)
+            return guarded("command", function()
+                if not config.canDebug or not config.canDebug(caller) then
+                    return fail "debug_not_allowed"
+                end
+                local identity, why = authenticate(caller, true)
+                if not identity then
+                    return why
+                end
+                if not registered(identity) then
+                    return fail "authenticated_character_required"
+                end
+                if not DebugRules.requests[kind] then
+                    return fail "request_not_supported"
+                end
+                local clean, reason = plainFields(data, DebugRules.requests[kind])
+                if not clean then
+                    return fail("invalid_request", reason)
+                end
+                if expectedRevision ~= world.revision then
+                    return fail "stale_revision"
+                end
+                local proof, problem = config.debugObserve(kind, clean, identity, Core.snapshot(world), caller)
+                if not proof then
+                    return fail(problem or "debug_native_proof_required")
+                end
+                return apply(kind, clean, context(identity, true, proof))
             end)
         end
         -- Trusted runtime entry only. Never route a client kind/observation here.
@@ -442,7 +480,7 @@ function Authority.open(config)
                 if type(home) ~= "table" or not isFinite(home.x) or not isFinite(home.y) or not isFinite(home.z) then
                     return fail "household_home_required"
                 end
-                local blueprint = Defaults.household({ x = home.x, y = home.y, z = home.z }, characters)
+                local blueprint = ReedHousehold.household({ x = home.x, y = home.y, z = home.z }, characters)
                 local staged, ctx, changed = Core.snapshot(world), context(nil, true), false
                 local function seed(kind, data)
                     local result = Core.apply(staged, Core.command(staged, ctx.issuer, kind, data), ctx)

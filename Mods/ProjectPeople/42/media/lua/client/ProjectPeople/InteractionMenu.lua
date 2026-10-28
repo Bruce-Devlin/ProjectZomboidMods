@@ -1,4 +1,15 @@
 local Interaction = require "ProjectPeople/Interaction"
+-- The optional debug UI is bound by SurvivorInterface, after normal UI modules load.
+local Debug = {
+    row = function(id)
+        return ProjectPeople and ProjectPeople.Debug and ProjectPeople.Debug.row(id)
+    end,
+    person = function(parent, id)
+        if ProjectPeople and ProjectPeople.Debug then
+            ProjectPeople.Debug.person(parent, id)
+        end
+    end,
+}
 local Menu = {}
 
 local function plain(text)
@@ -45,6 +56,10 @@ function Menu.add(context, view, id, player, open, submit)
     local person = view.world.people[id]
     local options = Menu.options(view, id, player)
     if #options == 0 then
+        local row = Debug.row(id)
+        if row then
+            Debug.person(submenu(context, plain(row.name)), id)
+        end
         return
     end
     local root = submenu(context, plain(person.name))
@@ -64,6 +79,7 @@ function Menu.add(context, view, id, player, open, submit)
     root:addOption("View person", nil, function()
         open(id)
     end)
+    Debug.person(root, id)
 end
 
 function Menu.fill(playerIndex, context, objects, testOnly, view, open, submit, eachBody)
@@ -82,7 +98,7 @@ function Menu.fill(playerIndex, context, objects, testOnly, view, open, submit, 
             return
         end
         local id = actor:getModData().ProjectPeoplePersonId
-        if not id or added[id] or not view.world.people[id] then
+        if not id or added[id] or not view.world.people[id] and not Debug.row(id) then
             return
         end
         added[id] = true

@@ -1,3 +1,4 @@
 name=Project People
 id=ProjectPeople
-description=Project People development snapshot for Build 42.21. Engine prototypes and persistent-person systems; connected gameplay is incomplete. Not a playable alpha.
+author=Bruce Devlin
+description=Survivors with their own backgrounds, families and opinions of you. Get to know them, share supplies and ask them to travel with you. Includes conversations, companions, equipment trading, combat and basic care. For Build 42.21. Work in progress; community work, succession and save/restart recovery are still being developed and tested.

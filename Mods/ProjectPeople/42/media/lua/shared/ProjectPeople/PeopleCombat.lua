@@ -5,9 +5,11 @@ local Body = require "ProjectPeople/PeopleBody"
 local Space = require "ProjectPeople/Pathing/CombatSpace"
 local Weapons = require "ProjectPeople/PeopleWeapons"
 local SocialGroup = require "ProjectPeople/Behaviour/Groups"
+local Settings = require "ProjectPeople/Pathing/Settings"
+local Party = require "ProjectPeople/Party"
 local Combat = {}
 
-function Combat.applyDamage(actor, target, weapon, damage, kind)
+function Combat.applyDamage(actor, target, weapon, damage, kind, action, knockdown)
     assert(type(damage) == "number" and damage >= 0 and damage <= 1, "bounded_combat_damage_required")
     if kind == "player" then
         -- IsoPlayer.hitConsequences ignores Hit's damage argument and rolls
@@ -27,16 +29,47 @@ function Combat.applyDamage(actor, target, weapon, damage, kind)
             local knockback = weapon:isKnockBackOnNoDeath()
             weapon:setKnockBackOnNoDeath(false)
             local ok, err = pcall(function()
-                target:Hit(weapon, actor, damage, false, 1, false)
+                target:Hit(weapon, actor, damage, action == "shove", 1, false)
             end)
             weapon:setKnockBackOnNoDeath(knockback)
             if not ok then
                 error(err)
             end
         else
-            target:Hit(weapon, actor, damage, false, 1, false)
+            target:Hit(weapon, actor, damage, action == "shove", 1, false)
+        end
+        if kind == "zombie" and not target:isDead() then
+            local dx, dy = target:getX() - actor:getX(), target:getY() - actor:getY()
+            local length = math.sqrt(dx * dx + dy * dy)
+            if length > 0.001 then
+                target:getHitDir():set(dx / length, dy / length)
+            end
+            target:setHitForce(action == "shove" and 0.8 or 0.35)
+            target:setStaggerBack(action ~= "stomp")
+            if knockdown then
+                target:setKnockedDown(true)
+            end
+            target:setHitReaction(action == "stomp" and "Floor" or "HeadLeft")
+            target:reportEvent "wasHit"
         end
     end
+end
+
+function Combat.grounded(target)
+    return target.isOnFloor and target:isOnFloor() or target.isCrawling and target:isCrawling() or false
+end
+
+function Combat.action(target, profile)
+    if target and target.kind == "zombie" then
+        if Combat.grounded(target.actor) then
+            return "stomp"
+        end
+        local minimum = profile and profile.minRange or 0.9
+        if target.distanceSquared < minimum ^ 2 then
+            return "shove"
+        end
+    end
+    return "swing"
 end
 
 local function distance(a, b)
@@ -60,14 +93,22 @@ function Combat.new(config)
     local strikes, cooldowns, enemies, approaches = {}, {}, {}, {}
     local fists
     local self = {}
+    local function allied(id, actor)
+        local other = actor and actor:getModData().ProjectPeoplePersonId
+        if other and config.person then
+            return Party.alliedPeople(config.person(id), config.person(other))
+        end
+        return other and config.world and Party.allied(config.world(), id, other) or false
+    end
     function self:isEnemy(id, actor)
-        return enemies[id] ~= nil and enemies[id][actor] == true
+        return not allied(id, actor) and enemies[id] ~= nil and enemies[id][actor] == true
     end
     function self:interrupt(id, record)
         strikes[id] = nil
         approaches[id] = nil
         record.combatActive = false
         record.attacking = false
+        record.attackAction = nil
         record.retreating = false
     end
     function self:provoked(victim, attacker)
@@ -75,6 +116,9 @@ function Combat.new(config)
             return
         end
         local id = victim:getModData().ProjectPeoplePersonId
+        if id and allied(id, attacker) then
+            return
+        end
         if id and config.actor and config.actor(id) ~= victim then
             return
         end
@@ -93,6 +137,7 @@ function Combat.new(config)
             if
                 witness
                 and witness ~= attacker
+                and not allied(member, attacker)
                 and not witness:isDead()
                 and distance(witness, victim) <= Policy.NOTICE_RADIUS ^ 2
                 and distance(witness, attacker) <= Policy.NOTICE_RADIUS ^ 2
@@ -116,7 +161,8 @@ function Combat.new(config)
                 end
             end
             if
-                (not humans or person)
+                not allied(id, enemy)
+                and (not humans or person)
                 and not enemy:isDead()
                 and distance(actor, enemy) <= Policy.NOTICE_RADIUS ^ 2
                 and clear(actor, enemy)
@@ -136,7 +182,7 @@ function Combat.new(config)
             if d > Policy.NOTICE_RADIUS ^ 2 then
                 return
             end
-            local enemy = enemies[id] and enemies[id][target] or false
+            local enemy = self:isEnemy(id, target)
             result[#result + 1] = {
                 id = key,
                 actor = target,
@@ -164,10 +210,42 @@ function Combat.new(config)
         -- Hostile disposition is not permission to hurt a person. Only an
         -- observed attack creates an enemy; ordinary encounters can warn first.
         local perceived = candidates(actor, id, zombies, humans)
+        if record.homeGuard then
+            local localThreats = {}
+            for _, candidate in ipairs(perceived) do
+                local target = candidate.actor
+                if
+                    math.abs(target:getZ() - record.homeGuardZ) < 0.2
+                    and (target:getX() - record.homeGuardX) ^ 2 + (target:getY() - record.homeGuardY) ^ 2 <= 100
+                then
+                    localThreats[#localThreats + 1] = candidate
+                end
+            end
+            perceived = localThreats
+        end
+        if record.companionCombat then
+            local nearby = {}
+            for _, candidate in ipairs(perceived) do
+                local target = candidate.actor
+                if
+                    candidate.kind == "zombie"
+                    and math.abs(target:getZ() - record.leaderZ) < 0.2
+                    and (target:getX() - record.leaderX) ^ 2 + (target:getY() - record.leaderY) ^ 2 <= Settings.follow.assistLeash ^ 2
+                then
+                    nearby[#nearby + 1] = candidate
+                end
+            end
+            perceived = nearby
+        end
         local target = Policy.choose(perceived)
         local weaponProfile = target
             and Weapons.profile(actor, config.person and config.person(id), math.sqrt(target.distanceSquared))
-        local reach = weaponProfile and weaponProfile.range or Policy.MELEE_REACH
+        local action = Combat.action(target, weaponProfile)
+        local shoveReach = math.max(0.9, weaponProfile and weaponProfile.minRange or 0.9)
+        if action ~= "swing" then
+            weaponProfile = nil
+        end
+        local reach = action == "shove" and shoveReach or weaponProfile and weaponProfile.range or Policy.MELEE_REACH
         local strike = strikes[id]
         -- Zombies pre-empt even a committed swing against a person.
         if strike and (not target or strike.target ~= target.actor) then
@@ -196,8 +274,10 @@ function Combat.new(config)
         local recovering = now < (cooldowns[id] or 0)
         if
             target.kind == "zombie"
+            and not strike
+            and (action == "swing" or action == "shove" and recovering)
             and target.distanceSquared < 2.2 ^ 2
-            and (target.distanceSquared <= Policy.MELEE_REACH ^ 2 or strike or recovering)
+            and (target.distanceSquared <= Policy.MELEE_REACH ^ 2 or recovering)
         then
             if not record.retreating or record.mode ~= "move" or now - (record.started or 0) >= 1200 then
                 local goal = Space.retreat(actor, target.actor, perceived)
@@ -226,9 +306,18 @@ function Combat.new(config)
                 record.combatResult = "Missed: target moved"
                 return true
             end
+            if (strike.action == "stomp") ~= Combat.grounded(target.actor) and target.kind == "zombie" then
+                record.combatResult = "Target changed stance"
+                return true
+            end
             local hit, damage = Policy.contact(target.kind, config.random(), actor:getHealth())
             local used = strike.weapon
             if used then
+                if target.kind == "zombie" and distance(actor, target.actor) < strike.profile.minRange ^ 2 then
+                    record.combatResult = "Crowded: making room"
+                    cooldowns[id] = now + 150
+                    return true
+                end
                 if Weapons.weapon(actor) ~= used then
                     record.combatResult = "Weapon changed"
                     return true
@@ -251,13 +340,26 @@ function Combat.new(config)
                 end
                 Weapons.wear(used, config.random())
             end
-            record.combatResult = hit and "Strike landed" or "Missed"
+            if strike.action == "shove" then
+                damage = 0
+            end
+            record.combatResult = hit
+                    and (strike.action == "shove" and "Shoved zombie" or strike.action == "stomp" and "Stomp landed" or "Strike landed")
+                or "Missed"
             if hit then
                 fists = fists or instanceItem "Base.BareHands"
                 assert(fists and instanceof(fists, "HandWeapon"), "native_unarmed_weapon_required")
                 -- Avoid the vanilla player-only Strength XP cast for NPC fists.
                 fists:setKnockBackOnNoDeath(false)
-                config.hit(actor, target.actor, used or fists, damage, target.kind)
+                config.hit(
+                    actor,
+                    target.actor,
+                    used or fists,
+                    damage,
+                    target.kind,
+                    strike.action,
+                    strike.action == "shove" and config.random() < 0.3
+                )
             end
             return true
         end
@@ -272,7 +374,13 @@ function Combat.new(config)
                         reserved[#reserved + 1] = entry.goal
                     end
                 end
-                local goal = Space.approach(actor, target.actor, perceived, reserved)
+                local goal = Space.approach(
+                    actor,
+                    target.actor,
+                    perceived,
+                    reserved,
+                    weaponProfile and math.max(0.8, reach * 0.85)
+                )
                 approaches[id] = goal and { target = target.actor, goal = goal, at = now } or nil
                 if goal then
                     Body.order(record, goal, now)
@@ -289,7 +397,19 @@ function Combat.new(config)
         if now < (cooldowns[id] or 0) then
             return true
         end
+        -- Finish the committed strike before making space. Retreating through
+        -- its whole wind-up can move the attacker outside its own weapon reach
+        -- on every swing, even against a stationary zombie.
+        if record.retreating then
+            record.retreating = false
+            Body.order(record, nil, now)
+        end
         local rules = Policy.matchup(target.kind)
+        if action == "shove" then
+            rules.windupMs, rules.cooldownMs = 350, 1000
+        elseif action == "stomp" then
+            rules.windupMs, rules.cooldownMs = 650, 1200
+        end
         if weaponProfile then
             rules.windupMs = math.max(rules.windupMs, weaponProfile.windupMs)
             rules.cooldownMs = math.max(rules.cooldownMs, weaponProfile.cooldownMs)
@@ -316,11 +436,13 @@ function Combat.new(config)
         end
         record.attackEpoch = (record.attackEpoch or 0) + 1
         record.attacking = true
+        record.attackAction = action
         record.attackX = target.actor:getX()
         record.attackY = target.actor:getY()
         record.attackDuration = rules.windupMs
         strikes[id] = {
             target = target.actor,
+            action = action,
             contactAt = now + rules.windupMs,
             rules = rules,
             reach = reach,

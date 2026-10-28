@@ -143,6 +143,15 @@ function Runtime.new(adapters)
         end
         return ok
     end
+    local function separated(site)
+        local world = self.world
+        for _, group in pairs(world and world.population and world.population.groups or {}) do
+            if not group.historical and distanceSquared(site, group.home) < 30 ^ 2 then
+                return false
+            end
+        end
+        return true
+    end
     function self:intent(p, r, records)
         if
             not self.world
@@ -201,11 +210,8 @@ function Runtime.new(adapters)
         return movement:flee(p, r, actor, self:group(p), zombies, wall)
     end
     function self:goal(p, r, records, online, options, actor, wall)
-        local policy = Population.options(options)
-        if not policy.enabled or not policy.stories or options and options.IdleAutonomy == false then
-            movement:clear(p.id)
-            return nil
-        end
+        -- These settings stop new arrivals/background story changes or quiet
+        -- visits. Existing physical people must still execute their current route.
         local players = Runtime.players(online)
         local attended = false
         for _, h in ipairs(players) do
@@ -282,7 +288,7 @@ function Runtime.new(adapters)
                     validated = true,
                 }
                 local rid = Population.region(site.x, site.y)
-                if not seen[rid] and validate(site, players) then
+                if not seen[rid] and separated(site) and validate(site, players) then
                     sites[#sites + 1] = site
                     seen[rid] = true
                     break
@@ -364,8 +370,22 @@ function Runtime.new(adapters)
                     z = p.location.z,
                     groupId = p.populationGroup,
                 }
+                local clear = true
+                for otherId, other in pairs(records) do
+                    local otherPerson = world.people[otherId]
+                    if
+                        otherPerson
+                        and otherPerson.populationGroup ~= p.populationGroup
+                        and not other.dead
+                        and not other.missing
+                        and distanceSquared(site, other) < 20 ^ 2
+                    then
+                        clear = false
+                        break
+                    end
+                end
                 -- No moving a known person to a new candidate around a player.
-                if validate(site, players) then
+                if clear and validate(site, players) then
                     local ack = service.authority:applySystem(
                         "population.birth",
                         { personId = id },
@@ -375,7 +395,7 @@ function Runtime.new(adapters)
                         self.diagnostics.blocked = ack.code
                         return ack
                     end
-                    local ok, b, r = pcall(body.create, p, site)
+                    local ok, b, r = pcall(body.create, p, site, Population.age(self.world.population, time))
                     if not ok then
                         self.diagnostics.blocked = "native_birth_outcome_unknown"
                         unknown = unknown + 1

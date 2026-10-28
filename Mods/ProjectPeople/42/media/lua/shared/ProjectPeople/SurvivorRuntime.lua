@@ -9,25 +9,42 @@ local Body = require "ProjectPeople/PeopleBody"
 local Core = require "ProjectPeople/Core"
 local Combat = require "ProjectPeople/PeopleCombat"
 local FriendlyFire = require "ProjectPeople/FriendlyFire"
+local Alarm = require "ProjectPeople/PeopleAlarm"
+local Party = require "ProjectPeople/Party"
 local ZombieThreat = require "ProjectPeople/ZombieThreat"
 local Work = require "ProjectPeople/HouseholdWork"
+local homeWork = require("ProjectPeople/HomeRuntime").new()
 local BehaviourRuntime = require "ProjectPeople/Behaviour/Runtime"
+local PairConversation = require "ProjectPeople/Behaviour/PairConversation"
+local PlayerAlerts = require "ProjectPeople/Behaviour/PlayerAlerts"
+local DialogueClock = require "ProjectPeople/Behaviour/DialogueClock"
+local playerAlerts = PlayerAlerts.new(function(limit)
+    return ZombRand(limit)
+end)
+local CombatSpace = require "ProjectPeople/Pathing/CombatSpace"
 local Movement = require "ProjectPeople/Pathing/Movement"
+local Scavenging = require "ProjectPeople/Pathing/Scavenging"
 local companionMovement = Movement.new()
 local locomotion = require("ProjectPeople/Pathing/Locomotion").new()
 local behaviour = BehaviourRuntime.new()
+local conversations
 local population = require("ProjectPeople/Population/Runtime").new()
 local SaveStore = require "ProjectPeople/SaveStore"
 local SupplyJobs = require "ProjectPeople/SupplyJobs"
 local SuccessionService = require "ProjectPeople/SuccessionService"
 local EquipmentService = require "ProjectPeople/EquipmentService"
 local Equipment = require "ProjectPeople/PeopleEquipment"
+local DebugAccess = require "ProjectPeople/DebugAccess"
+local DebugService = require "ProjectPeople/DebugService"
+local TrustRewards = require "ProjectPeople/Behaviour/Trust"
+local TrustSpace = require "ProjectPeople/Pathing/CombatSpace"
 local Runtime = { MODULE = "ProjectPeopleSurvivors", BUILD = "people-20261023-locomotion-p1", active = false }
 ProjectPeople.Survivors = Runtime
 local service, metadata, latest
 local bodies, records, pendingBirths = {}, {}, {}
 local nextTick, sequence = 0, 0
 local combat, hitSequence
+local companionCombat = require("ProjectPeople/Behaviour/CompanionCombat").new()
 local combatPeople = {}
 local threats, threatOrders, threatReceivedAt
 local observedHelp = {}
@@ -37,6 +54,11 @@ local nextCheckpoint = 0
 local jobs
 local succession
 local equipment
+local health
+local debugTools
+local debugHealthUpdates = {}
+local alarms = Alarm.new()
+local alarmWorld
 
 local function now()
     return getTimestampMs()
@@ -162,6 +184,52 @@ local function open()
     end
     assert(metadata.storageVersion == 2, "legacy_save_requires_explicit_migration_use_new_development_world")
     local problem
+    local function danger(id, person)
+        local binding = bodies[id]
+        return binding
+                and InteractionDanger.check(
+                    binding.actor,
+                    records[id],
+                    person,
+                    getCell():getZombieList(),
+                    players(),
+                    identity,
+                    function(target)
+                        return combat and combat:isEnemy(id, target) or false
+                    end,
+                    function(z)
+                        return pursued(z, id)
+                    end
+                )
+            or false
+    end
+    debugTools = DebugService.new({
+        bodies = bodies,
+        records = records,
+        players = players,
+        identity = identity,
+        danger = danger,
+        clock = function()
+            return getGameTime():getWorldAgeHours()
+        end,
+        worldId = function()
+            return metadata.worldId
+        end,
+        options = function()
+            return SandboxVars and SandboxVars.ProjectPeople
+        end,
+        elapsedDays = function()
+            return getGameTime():getWorldAgeHours() / 24 + (getSandboxOptions():getTimeSinceApo() - 1) * 30
+        end,
+        healthBusy = function(id)
+            return health and health:busy(id)
+        end,
+        publishHealth = function(update)
+            if isServer() then
+                sendServerCommand(Runtime.MODULE, "debugHealth", update)
+            end
+        end,
+    })
     service, problem = Service.open({
         binding = function()
             return {
@@ -176,32 +244,31 @@ local function open()
             return getGameTime():getWorldAgeHours()
         end,
         authenticate = identity,
-        nearby = nearby,
-        interactionDanger = function(id, person)
-            local binding = bodies[id]
-            return binding
-                    and InteractionDanger.check(
-                        binding.actor,
-                        records[id],
-                        person,
-                        getCell():getZombieList(),
-                        players(),
-                        identity,
-                        function(target)
-                            return combat and combat:isEnemy(id, target) or false
-                        end,
-                        function(z)
-                            return pursued(z, id)
-                        end
-                    )
-                or false
+        followerLimit = function()
+            return SandboxVars and SandboxVars.ProjectPeople and SandboxVars.ProjectPeople.ActiveFollowerLimit
         end,
+        canDebug = DebugAccess.allowed,
+        debugObserve = function(...)
+            return debugTools:observe(...)
+        end,
+        debug = function(caller, request)
+            return debugTools:request(service, caller, request)
+        end,
+        nearby = nearby,
+        interactionDanger = danger,
         io = SaveStore.io(metadata),
         job = function(caller, kind, fields)
             return jobs and jobs:request(caller, kind, fields) or { ok = false, code = "jobs_not_ready" }
         end,
         equipment = function(caller, kind, fields)
             return equipment:request(caller, kind, fields)
+        end,
+        health = function(caller, kind, fields)
+            return health:request(caller, kind, fields)
+        end,
+        healthSummary = function(id)
+            local b, r = bodies[id], records[id]
+            return b and r and Body.matches(b, r) and b.actor:getHealth() * 100 or nil
         end,
         succession = function(caller, id)
             return succession:reserve(caller, id)
@@ -214,7 +281,8 @@ local function open()
         end,
         groupAvailable = function(caller, id)
             local b = bodies[id]
-            return b and not b.actor:isDead() and distance(caller, b.actor) <= 12 ^ 2
+            return b and not b.actor:isDead() and distance(caller, b.actor) <= 12 ^ 2,
+                "Come within twelve tiles of each other on the same floor, then ask again."
         end,
         help = function(player, auth)
             local world = auth:snapshot()
@@ -245,6 +313,53 @@ local function open()
         end,
         recover = SaveStore.recover,
         observe = function(kind, data, who, world, caller)
+            if kind == "community.home.set" then
+                if
+                    not Party.home(data)
+                    or math.abs(caller:getZ() - data.z) > 0.2
+                    or (caller:getX() - data.x) ^ 2 + (caller:getY() - data.y) ^ 2 > 20 ^ 2
+                then
+                    return nil
+                end
+                local sq = getCell():getGridSquare(math.floor(data.x), math.floor(data.y), data.z)
+                local origin = caller:getCurrentSquare()
+                if
+                    not sq
+                    or not origin
+                    or not sq:TreatAsSolidFloor()
+                    or not sq:isFree(false)
+                    or sq:isWaterSquare()
+                    or sq:isVehicleIntersecting()
+                    or not SafeHouse
+                    or SafeHouse.isSafeHouse(sq, caller:getUsername(), true)
+                    or tostring(
+                            LosUtil.lineClear(
+                                getCell(),
+                                origin:getX(),
+                                origin:getY(),
+                                origin:getZ(),
+                                sq:getX(),
+                                sq:getY(),
+                                sq:getZ(),
+                                false
+                            )
+                        )
+                        ~= "Clear"
+                then
+                    return nil
+                end
+                return {
+                    evidence = {
+                        kind = "community_home",
+                        validated = true,
+                        actorId = who.personId,
+                        x = data.x,
+                        y = data.y,
+                        z = data.z,
+                        safe = true,
+                    },
+                }
+            end
             if kind == "person.bind_initial" then
                 return nativeBirth(data.personId)
             end
@@ -296,6 +411,17 @@ local function open()
     equipment = EquipmentService.new({
         authority = service.authority,
         identity = identity,
+        actor = function(id)
+            if bodies[id] and records[id] and Body.matches(bodies[id], records[id]) then
+                return bodies[id].actor, records[id]
+            end
+        end,
+    })
+    health = require("ProjectPeople/HealthService").new({
+        authority = service.authority,
+        identity = identity,
+        now = now,
+        danger = danger,
         actor = function(id)
             if bodies[id] and records[id] and Body.matches(bodies[id], records[id]) then
                 return bodies[id].actor, records[id]
@@ -475,14 +601,27 @@ local function publish(player)
     payload.build = Runtime.BUILD
     payload.bodies = {}
     payload.threats = {}
+    payload.debug = debugTools:view(service.authority, player, population.diagnostics)
     if payload.world then
         local fireWorld = service.authority:snapshot()
+        alarmWorld = fireWorld
         for id, person in pairs(payload.world.people) do
             local r = records[id]
             if r then
                 person.activity = r.activity
                 person.missing = r.missing
                 person.life = r.dead and "dead" or person.life
+                if
+                    person.commanderId == payload.personId
+                    and person.partyId
+                    and bodies[id]
+                    and Body.matches(bodies[id], r)
+                    and not r.missing
+                then
+                    person.health = r.health
+                    person.location = { x = r.x, y = r.y, z = r.z }
+                    person.partyDanger = r.combatActive or r.fleeing or r.cautious or false
+                end
             elseif person.controller and person.controller.kind == "ai" then
                 person.missing = true
                 person.activity = "Currently unavailable"
@@ -493,7 +632,14 @@ local function publish(player)
             local b = bodies[id]
             if b and Body.hasNetworkId(record.nativeId) and distance(player, b.actor) <= 6400 then
                 payload.bodies[id] = Core.snapshot(record)
+                payload.bodies[id].playerAlert = playerAlerts:line(id, payload.personId)
                 payload.bodies[id].friendlyFirePlayers = FriendlyFire.players(fireWorld, id, players(), identity)
+                payload.bodies[id].alliedPeople = {}
+                for other in pairs(fireWorld.people) do
+                    if Party.allied(fireWorld, id, other) then
+                        payload.bodies[id].alliedPeople[other] = true
+                    end
+                end
             end
         end
         for _, order in ipairs(threatOrders or {}) do
@@ -506,6 +652,7 @@ local function publish(player)
         sendServerCommand(player, Runtime.MODULE, "view", payload)
     else
         latest = payload
+        Runtime.viewAt, Runtime.dialogueViewAt = now(), DialogueClock.now()
     end
 end
 
@@ -514,8 +661,8 @@ local function orderFor(record, goal)
     Body.order(record, goal, now(), b and b.actor)
 end
 
-local function nativeHit(actor, target, weapon, damage, kind)
-    Combat.applyDamage(actor, target, weapon, damage, kind)
+local function nativeHit(actor, target, weapon, damage, kind, action, knockdown)
+    Combat.applyDamage(actor, target, weapon, damage, kind, action, knockdown)
     if kind ~= "player" and target:getTarget() == actor then
         target:setTarget(nil)
     end
@@ -580,7 +727,13 @@ local function simulation()
             human[who.personId] = p
         end
     end
+    health:step()
     companionMovement:sampleLeaders(human, now())
+    for id, h in pairs(human) do
+        if h:isAttacking() then
+            companionCombat:started(id, h, now())
+        end
+    end
     -- Rebind only actual saved native bodies. Never fabricate a replacement
     -- because a chunk has not loaded, a handle was recycled, or an ack was lost.
     for id, p in pairs(world.people) do
@@ -598,6 +751,7 @@ local function simulation()
         behaviour:step(service, bodies, records, online, identity, getGameTime():getWorldAgeHours())
     assert(advanced, behaviourError)
     world = advanced
+    world = homeWork:clock(service.authority, records, getGameTime():getWorldAgeHours())
     population.world = world
     for id, b in pairs(bodies) do
         local r, p = records[id], world.people[id]
@@ -609,7 +763,14 @@ local function simulation()
         r.equipment = Equipment.hands(b.actor)
         r.missing = not observed.inWorld or observed.personId ~= id
         r.transferReserved = p.reservationId ~= nil or p.transitionId ~= nil
+        homeWork:begin(p, r, b.actor, now())
+        if r.homeOrderChanged then
+            r.homeOrderChanged = nil
+            b.homeRoute, b.workDoor = nil, nil
+            orderFor(r, nil)
+        end
         local flight, avoidCombat
+        companionCombat:step(p, r, b.actor, human[p.commanderId], now())
         if not r.transferReserved and not observed.dead and not r.missing then
             flight, avoidCombat = locomotion:step(p, r, b.actor, zombies, now(), human[p.commanderId], pursued)
             -- Witnessed violence takes precedence over routine follow/avoidance.
@@ -635,6 +796,13 @@ local function simulation()
             if r.mode == "move" then
                 orderFor(r, nil)
             end
+        elseif health:busy(id) then
+            Movement.clearAttention(r)
+            combat:interrupt(id, r)
+            if r.mode == "move" then
+                orderFor(r, nil)
+            end
+            r.activity = "Receiving first aid"
         elseif flight then
             Movement.clearAttention(r)
             combat:interrupt(id, r)
@@ -652,10 +820,18 @@ local function simulation()
                 end
                 combat:interrupt(id, r)
             end
-            if Movement.attention(p, r, b.actor, online, identity) then
+            if playerAlerts:holding(id) then
+                -- The alert manager below rechecks danger and owns facing.
                 if r.mode == "move" then
                     orderFor(r, nil)
                 end
+            elseif Movement.attention(p, r, b.actor, online, identity) then
+                if r.mode == "move" then
+                    orderFor(r, nil)
+                end
+            elseif conversations and conversations:holding(id) then
+                -- Danger/combat/player attention above outrank this short pause.
+                -- Pair validation below releases both people together.
             else
                 local relevant = false
                 for _, h in pairs(human) do
@@ -678,10 +854,20 @@ local function simulation()
                             and (r.x - r.goalX) ^ 2 + (r.y - r.goalY) ^ 2 <= 0.25
                         orderFor(r, nil)
                         r.activity = arrived and "Arrived" or "Path blocked"
-                        r.retryAt = p.duty == "follow" and now() or now() + 5000
+                        -- A completed doorway leg continues immediately. A
+                        -- five-second wait here consumed the entry stall budget.
+                        r.retryAt = (arrived or p.duty == "follow") and now() or now() + 5000
                     end
-                    if r.duty ~= p.duty then
+                    local home = p.duty == "base" and p.home
+                    local homeSquare = home and getCell():getGridSquare(math.floor(home.x), math.floor(home.y), home.z)
+                    local outsideHome = homeSquare
+                        and homeSquare:getBuilding()
+                        and b.actor:getCurrentSquare()
+                        and b.actor:getCurrentSquare():getBuilding() ~= homeSquare:getBuilding()
+                    if r.duty ~= p.duty or home and (r.homeX ~= home.x or r.homeY ~= home.y or r.homeZ ~= home.z) then
                         r.duty = p.duty
+                        r.homeX, r.homeY, r.homeZ = home and home.x, home and home.y, home and home.z
+                        b.workDoor, b.homeRoute = nil, nil
                         orderFor(r, nil)
                         r.retryAt = 0
                         r.behaviourVisiting = false
@@ -699,28 +885,63 @@ local function simulation()
                     elseif
                         p.duty == "base"
                         and p.home
+                        and not r.homeActive
                         and not b.workDoor
-                        and not r.behaviourVisiting
-                        and (r.x - p.home.x) ^ 2 + (r.y - p.home.y) ^ 2 > 4
+                        and (
+                            outsideHome
+                            or (r.x - p.home.x) ^ 2 + (r.y - p.home.y) ^ 2 > 4
+                            or math.abs(r.z - p.home.z) > 0.2
+                        )
                     then
                         goal = p.home
+                        local square = getCell():getGridSquare(math.floor(goal.x), math.floor(goal.y), goal.z)
+                        local current = b.actor:getCurrentSquare()
+                        if
+                            square
+                            and square:getBuilding()
+                            and current
+                            and current:getBuilding() ~= square:getBuilding()
+                        then
+                            b.homeRoute = b.homeRoute or {}
+                            if r.mode == "wait" then
+                                b.homeRoute.entryProgressAt = now()
+                            end
+                            -- The local scavenging scan may not contain this
+                            -- home's door, or exclude an owner's claimed floor.
+                            -- An explicit home order still gets a native route.
+                            goal = Scavenging.entrance(b.actor, square:getBuilding(), b.homeRoute, now()) or p.home
+                        end
                         r.activity = "Returning home"
+                        r.behaviourVisiting = false
+                    elseif p.duty == "base" and p.home and r.homeActive then
+                        goal = homeWork:step(p, r, b.actor, human[p.commanderId], bodies, world, now())
+                        if not goal and r.mode == "move" then
+                            orderFor(r, nil)
+                        end
                     elseif p.duty == "base" and p.home then
-                        if now() >= (r.nextWork or 0) then
+                        if not b.workDoor and now() >= (r.nextWork or 0) then
                             r.nextWork = now() + 5000
                             b.workDoor = Work.findDoor(p.home, b.actor)
                         end
                         if b.workDoor then
-                            local closed = Work.close(b.actor, b.workDoor)
+                            local closed, reason = Work.close(b.actor, b.workDoor)
                             if closed then
-                                b.workDoor = nil
+                                b.workDoor, b.workDoorAt = nil, nil
+                                r.nextWork = now() + 30000
                                 r.activity = "Closed an open door"
                                 orderFor(r, nil)
                             else
                                 goal = Work.goal(b.workDoor)
                                 r.activity = goal and "Securing the house" or "Door unreachable"
+                                b.workDoorAt = b.workDoorAt or now()
+                                if not goal or reason == "door_no_longer_open" or now() - b.workDoorAt > 15000 then
+                                    b.workDoor, b.workDoorAt = nil, nil
+                                    r.nextWork = now() + 30000
+                                    goal = nil
+                                end
                             end
                         else
+                            b.workDoorAt = nil
                             r.activity = "Watching the house"
                             idle = true
                         end
@@ -748,6 +969,14 @@ local function simulation()
                         else
                             r.behaviourVisiting = false
                         end
+                        if
+                            home
+                            and goal
+                            and (math.abs(goal.z - home.z) > 0.2 or (goal.x - home.x) ^ 2 + (goal.y - home.y) ^ 2 > 4)
+                        then
+                            goal = nil
+                            r.behaviourVisiting = false
+                        end
                         if not goal and r.mode == "move" then
                             orderFor(r, nil)
                         end
@@ -758,6 +987,8 @@ local function simulation()
                         and (
                             r.mode ~= "move"
                             or p.duty == "follow" and ((goal.x - r.goalX) ^ 2 + (goal.y - r.goalY) ^ 2 > 0.01 or goal.z ~= r.goalZ)
+                            or r.homeActive and ((goal.x - r.goalX) ^ 2 + (goal.y - r.goalY) ^ 2 > 0.01 or goal.z ~= r.goalZ)
+                            or goal.entry and ((goal.x - r.goalX) ^ 2 + (goal.y - r.goalY) ^ 2 > 0.01 or goal.z ~= r.goalZ)
                             or now() - r.started > 1500 and (goal.x - r.goalX) ^ 2 + (goal.y - r.goalY) ^ 2 > 4
                         )
                     then
@@ -768,7 +999,93 @@ local function simulation()
         else
             Movement.clearAttention(r)
         end
+        if
+            r.homeActive
+            and p.homeWork
+            and p.homeWork.breakKind == "relax"
+            and conversations
+            and conversations:holding(id)
+            and not r.combatActive
+            and not r.fleeing
+        then
+            r.homeResting = true
+        end
+        if not r.homeWorking and not r.homeResting then
+            homeWork:interrupt(id, r)
+        end
         companionMovement:lookAround(p, r, b.actor, now())
+    end
+    conversations = conversations
+        or PairConversation.new({
+            matches = Body.matches,
+            clear = CombatSpace.clear,
+            random = function(limit)
+                return ZombRand(limit)
+            end,
+            stop = function(record)
+                orderFor(record, nil)
+            end,
+            busy = function(id)
+                return health:busy(id)
+            end,
+            danger = function(id, actor, record, person)
+                return combat:hasVisibleEnemy(id, actor, players())
+                    or InteractionDanger.check(
+                        actor,
+                        record,
+                        person,
+                        getCell():getZombieList(),
+                        players(),
+                        identity,
+                        nil,
+                        function(z)
+                            return pursued(z, id)
+                        end
+                    )
+            end,
+        })
+    conversations:step(
+        world,
+        bodies,
+        records,
+        human,
+        DialogueClock.now(),
+        not SandboxVars or not SandboxVars.ProjectPeople or SandboxVars.ProjectPeople.IdleAutonomy ~= false
+    )
+    local function alertEligible(id, binding, player, continuing)
+        local r, p = records[id], world.people[id]
+        return p
+            and p.life == "alive"
+            and p.controller.kind == "ai"
+            and not p.reservationId
+            and not p.transitionId
+            and not health:busy(id)
+            and not (p.homeWork and p.duty == "base" and p.homeWork.breakKind == "sleep")
+            and r
+            and Body.matches(binding, r)
+            and PlayerAlerts.eligible(binding.actor, r, player, CombatSpace.clear, continuing)
+            and not combat:hasVisibleEnemy(id, binding.actor, online)
+            and not InteractionDanger.check(binding.actor, r, p, zombies, online, identity, nil, function(z)
+                return pursued(z, id)
+            end)
+    end
+    playerAlerts:step(bodies, human, DialogueClock.now(), alertEligible, function(id, binding, player)
+        return alertEligible(id, binding, player, true)
+    end)
+    for id, r in pairs(records) do
+        local recipient = playerAlerts:holding(id)
+        local player = recipient and human[recipient]
+        if player then
+            if r.mode == "move" then
+                orderFor(r, nil)
+            end
+            r.faceX, r.faceY = player:getX(), player:getY()
+            r.activity, r.behaviourResting = "Greeting a survivor", false
+        elseif r.playerAlertTarget and r.activity == "Greeting a survivor" then
+            r.faceX, r.faceY, r.retryAt = nil, nil, 0
+            r.activity = "Greeting ended"
+        end
+        r.playerAlertTarget = recipient
     end
     threatOrders = threats:plan(zombies, bodies, records, online, now())
     if now() >= nextCheckpoint then
@@ -878,6 +1195,11 @@ local function tick()
                 if not bodies[id] then
                     bodies[id] = Body.find(record)
                 end
+                local update = debugHealthUpdates[id]
+                if update and DebugService.applyHealth(bodies[id], records[id], update) then
+                    record.health = update.health
+                    debugHealthUpdates[id] = nil
+                end
             end
         end
     end
@@ -888,6 +1210,10 @@ local function command(player, args)
         return
     end
     local result = service:request(player, args)
+    if result.ok and conversations and type(args.fields) == "table" and args.fields.personId then
+        conversations:cancel(args.fields.personId, records, DialogueClock.now())
+        playerAlerts:cancel(args.fields.personId)
+    end
     result.requestId = args.id
     result.personId = type(args.fields) == "table" and args.fields.personId or nil
     if isServer() then
@@ -912,6 +1238,19 @@ end
 
 function Runtime.view()
     return latest
+end
+
+function Runtime.playerAlert(id)
+    if not Runtime.dialogueViewAt or DialogueClock.now() - Runtime.dialogueViewAt > 3000 then
+        return nil
+    end
+    if authority() then
+        -- SP native bodies can retain sentinel network IDs and aren't in the
+        -- replication payload; use the same recipient-specific authority text.
+        return latest and playerAlerts:line(id, latest.personId) or nil
+    end
+    local record = latest and latest.bodies and latest.bodies[id]
+    return record and record.playerAlert or nil
 end
 
 function Runtime.threatFor(actor)
@@ -958,8 +1297,35 @@ local function guard(fn, ...)
         end
     end
 end
+local function beginAlarm(player)
+    if Runtime.active and not player:isDead() and not player:isGodMod() then
+        local world = alarmWorld
+        local who = world and identity(player)
+        if who then
+            alarms:begin(player, Alarm.friends(world, who.personId, Runtime.eachBody))
+        end
+    end
+end
+Events.OnPlayerUpdate.Add(function(player)
+    if not isClient() and not isServer() and player:isLocalPlayer() then
+        guard(beginAlarm, player)
+    end
+end)
 Events.OnTick.Add(function()
+    if DialogueClock.paused() then
+        return
+    end
+    guard(alarms.finish, alarms)
     guard(tick)
+    -- Installed multiplayer BodyDamage owns panic on the server. Remote
+    -- players return before OnPlayerUpdate, so bracket their next simulation
+    -- update from this tick boundary instead of changing client stats twice.
+    if isServer() then
+        local online = players()
+        for i = 0, online:size() - 1 do
+            guard(beginAlarm, online:get(i))
+        end
+    end
 end)
 Events.OnZombieUpdate.Add(function(actor)
     local id = actor:getModData().ProjectPeoplePersonId
@@ -984,7 +1350,73 @@ Events.OnZombieUpdate.Add(function(actor)
         guard(threats.update, threats, actor, orders and threatOrders or {}, bodies, records, now())
     end
 end)
+if Events.OnWeaponSwing then
+    Events.OnWeaponSwing.Add(function(attacker)
+        if authority() and service and attacker and instanceof(attacker, "IsoPlayer") then
+            local who = identity(attacker)
+            if who and who.alive then
+                companionCombat:started(who.personId, attacker, now())
+            end
+        end
+    end)
+end
 Events.OnWeaponHitCharacter.Add(function(attacker, victim)
+    if attacker and victim then
+        local attackerId = attacker:getModData().ProjectPeoplePersonId
+        local victimId = victim:getModData().ProjectPeoplePersonId
+        if
+            attackerId
+            and victimId
+            and bodies[attackerId]
+            and records[attackerId]
+            and bodies[attackerId].actor == attacker
+            and Body.matches(bodies[attackerId], records[attackerId])
+            and bodies[victimId]
+            and records[victimId]
+            and bodies[victimId].actor == victim
+            and Body.matches(bodies[victimId], records[victimId])
+        then
+            local record = latest and latest.bodies and latest.bodies[victimId]
+            local allied = authority() and service and Party.allied(service.authority:snapshot(), attackerId, victimId)
+                or record and record.alliedPeople and record.alliedPeople[attackerId] == true
+            if allied then
+                victim:setAvoidDamage(true)
+                return
+            end
+        end
+    end
+    if
+        authority()
+        and service
+        and attacker
+        and victim
+        and instanceof(attacker, "IsoPlayer")
+        and instanceof(victim, "IsoZombie")
+        and not victim:getModData().ProjectPeoplePersonId
+    then
+        local who = identity(attacker)
+        if who and who.alive then
+            companionCombat:started(who.personId, attacker, now())
+            for id, body in pairs(bodies) do
+                local record = records[id]
+                if
+                    record
+                    and record.combatActive
+                    and Body.matches(body, record)
+                    and not body.actor:isDead()
+                    and TrustSpace.distance(body.actor, attacker) <= 64
+                    and TrustSpace.distance(body.actor, victim) <= 64
+                    and TrustSpace.clear(body.actor, attacker)
+                    and TrustSpace.clear(body.actor, victim)
+                then
+                    local reward = TrustRewards.record(service.authority, id, who.personId, "combat")
+                    if not reward.ok then
+                        error(reward.code)
+                    end
+                end
+            end
+        end
+    end
     if attacker and victim and instanceof(attacker, "IsoPlayer") then
         local id = victim:getModData().ProjectPeoplePersonId
         if
@@ -1062,6 +1494,7 @@ elseif isClient() then
         if kind == "view" and payload.build == Runtime.BUILD then
             if not latest or not latest.world or payload.world and payload.world.revision >= latest.world.revision then
                 latest = payload
+                Runtime.viewAt, Runtime.dialogueViewAt = now(), DialogueClock.now()
                 Runtime.active = true
                 threatOrders = payload.threats or {}
                 threatReceivedAt = now()
@@ -1069,6 +1502,15 @@ elseif isClient() then
                 if player and payload.personId then
                     player:getModData().ProjectPeopleCharacterId = payload.personId
                 end
+            end
+        elseif kind == "debugHealth" and type(payload.personId) == "string" then
+            local id = payload.personId
+            if DebugService.applyHealth(bodies[id], records[id], payload) then
+                if latest and latest.bodies and latest.bodies[id] then
+                    latest.bodies[id].health = payload.health
+                end
+            elseif not records[id] or not bodies[id] then
+                debugHealthUpdates[id] = payload
             end
         elseif kind == "reply" then
             Runtime.reply = payload

@@ -6,6 +6,7 @@ local kinds = {
     ["behaviour.interact"] = true,
     ["cooperation.request"] = true,
     ["duty.set"] = true,
+    ["home.role.set"] = true,
     ["help.secure_home"] = true,
     ["job.start"] = true,
     ["job.recall"] = true,
@@ -15,6 +16,7 @@ local kinds = {
     ["equipment.set"] = true,
     ["gift.open"] = true,
     ["inventory.gift"] = true,
+    ["health.treat"] = true,
 }
 
 function Danger.guards(kind)

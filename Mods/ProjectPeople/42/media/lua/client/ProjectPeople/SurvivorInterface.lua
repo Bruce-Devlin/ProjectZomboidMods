@@ -2,6 +2,10 @@ local Runtime = require "ProjectPeople/SurvivorRuntime"
 local Interface = require "ProjectPeople/Interface"
 require "ProjectPeople/EquipmentInterface"
 require "ProjectPeople/GiftInterface"
+require "ProjectPeople/HealthInterface"
+require "ProjectPeople/DebugInterface"
+require "ProjectPeople/PartyInterface"
+require "ProjectPeople/HomeInterface"
 Interface.bind({
     eachBody = Runtime.eachBody,
     snapshot = function()

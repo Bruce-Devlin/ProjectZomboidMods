@@ -20,13 +20,14 @@ end
 -- Stop at striking distance instead of pathing into the victim's centre.
 -- Reserve distinct approach points when several survivors share one target.
 
-function Space.approach(actor, target, people, reserved)
+function Space.approach(actor, target, people, reserved, reach)
     local dx, dy = actor:getX() - target:getX(), actor:getY() - target:getY()
     local length = math.sqrt(dx * dx + dy * dy)
     if length < 0.01 then
         dx, dy, length = 1, 0, 1
     end
     dx, dy = dx / length, dy / length
+    dx, dy = dx * (reach or 1), dy * (reach or 1)
     local from = actor:getCurrentSquare()
     local victim = target:getCurrentSquare()
     if not from or not victim then

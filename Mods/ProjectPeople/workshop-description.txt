@@ -1,0 +1,34 @@
+Project People adds survivors to Project Zomboid. You'll meet people on their own and in small groups, with backgrounds, family ties and their own reasons to accept or turn down your help.
+
+Talk to them, get to know them and see who wants to stick around. Trust grows through time spent travelling together. Some people won't leave without their family, and a tired or frightened survivor may have more pressing concerns than joining you.
+
+[h2]What you can do[/h2]
+[list]
+[*]Ask survivors about their background, household, plans and what's on their mind.
+[*]Recruit willing companions, have them follow your route or wait, and send them back to a Community Home you've chosen.
+[*]Keep track of your companions through the Party panel. The default limit is three active followers and can be changed in Sandbox settings.
+[*]Offer gifts, trade supplies and manage equipment once someone trusts you. Weapons, clothes, bags and ammunition are actual inventory items.
+[*]Fight alongside your companions and provide basic care with a clean bandage or ripped sheet. Guns need ammunition; care won't cure infection.
+[*]Adjust survivor population, migration, stress and other behaviour through the Project People Sandbox settings.
+[/list]
+
+Survivors also move around and inspect nearby buildings on their own. They don't currently take loot from containers. New encounters vary with the age of the outbreak, including the equipment people arrive with.
+
+[h2]Getting started[/h2]
+Enable Project People in a Build 42.21 world. A fresh Sandbox world is the best place to try the development build.
+
+Explore, then right-click a survivor or open the People button near the top-left of the screen. Start with Speak. Cooperate contains travel, gifts, equipment and care options. If someone refuses, their reply should tell you why.
+
+To choose a home for your group, right-click a nearby floor and select Set Community Home. Sending a companion home frees their active party place without dismissing them.
+
+[h2]Still in development[/h2]
+Expect rough edges, especially around movement and combat. Wider community work and death-only succession are unfinished. Save/restart recovery, reconnects and long-running worlds still need more testing.
+
+Single-player and dedicated multiplayer have had focused tests, but full multiplayer support is still being worked through. Hosted co-op and split-screen are unverified. Build 41 is not supported. No external mod framework is required.
+
+If you find a bug, include your game build, other mods, whether you're playing alone or on a server, and what happened. For missing survivors, mention any recent reload or reconnect. Screenshots and logs help.
+
+[b]A note on AI use:[/b] AI was used during development to generate names, dialogue and other written content, and to help debug and complete complex mathematical code. No AI-generated artwork was used.
+
+[b]Mod ID:[/b] ProjectPeople
+[b]Author:[/b] Bruce Devlin

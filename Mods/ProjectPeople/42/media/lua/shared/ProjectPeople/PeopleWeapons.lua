@@ -44,6 +44,9 @@ function Weapons.profile(actor, person, distance)
     stats.weapon = weapon
     stats.ranged = ranged
     stats.range = range
+    -- The installed weapon definition owns its minimum usable reach. Keep a
+    -- small body-contact floor, rather than treating every weapon like fists.
+    stats.minRange = math.max(0.35, math.min(range, weapon.getMinRange and weapon:getMinRange() or 0.61))
     stats.damage = math.max(0.05, math.min(0.9, (weapon:getMinDamage() + weapon:getMaxDamage()) * 0.25 * stats.damage))
     return stats
 end

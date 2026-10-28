@@ -5,6 +5,52 @@
 ProjectPeople = ProjectPeople or {}
 local ZombieVisual = { FLAG = "ProjectPeopleActor", VOICE_PREFIX = "ProjectPeopleSilent" }
 ProjectPeople.ZombieVisual = ZombieVisual
+local cleaned = setmetatable({}, { __mode = "k" })
+local embedded = {
+    "Axe Back",
+    "Knife Stomach",
+    "Knife Shoulder",
+    "MeatCleaver in Back",
+    "JawStab",
+    "Stomach",
+    "Knife in Back",
+    "Knife Left Leg",
+    "Knife Right Leg",
+}
+
+function ZombieVisual.sanitize(actor)
+    if cleaned[actor] or not actor.getHumanVisual then
+        return
+    end
+    local visual, md = actor:getHumanVisual(), actor:getModData()
+    -- Factory zombie wounds are independent model layers, not the human skin.
+    local layers = visual:getBodyVisuals()
+    for i = layers:size() - 1, 0, -1 do
+        local name = tostring(layers:get(i):getItemType())
+        if name:find("ZedDmg", 1, true) or name:find("Bandage", 1, true) then
+            -- Kahlua may choose ArrayList.remove(Object) for a numeric index.
+            visual:removeBodyVisualFromItemType(name)
+        end
+    end
+    for _, slot in ipairs(embedded) do
+        local item = actor:getAttachedItem(slot)
+        if item then
+            actor:setAttachedItem(slot, nil)
+            -- Retain original items as carried inventory; do not destroy or copy them.
+            if not (isClient and isClient()) and not item:getContainer() then
+                actor:getInventory():AddItem(item)
+            end
+        end
+    end
+    if not md.ProjectPeopleHumanAppearanceVersion or isClient and isClient() then
+        visual:removeBlood()
+    end
+    if not (isClient and isClient()) then
+        md.ProjectPeopleHumanAppearanceVersion = 1
+    end
+    actor:resetModelNextFrame()
+    cleaned[actor] = true
+end
 
 local function applyHumanSkin(actor, skin)
     -- A SurvivorDesc is a human visual owner even when the actor is IsoZombie.
@@ -44,7 +90,7 @@ function ZombieVisual.configure(actor, skin)
     end
 
     -- Appearance is optional to actor mechanics; expose failure to diagnostics.
-    -- Preserve hair, worn items, bandages, blood, dirt and holes already present.
+    -- Preserve hair, worn equipment and genuine later combat marks.
     local appearanceOk, skinOrError = pcall(applyHumanSkin, actor, skin)
     return {
         ok = true,

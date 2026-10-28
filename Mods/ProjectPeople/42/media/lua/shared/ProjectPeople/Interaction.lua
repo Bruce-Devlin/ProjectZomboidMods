@@ -17,7 +17,8 @@ local reasons = {
     another_commander = "Already follows someone else",
     already_committed = "Has another commitment",
     committed_to_community = "Will not abandon community commitments",
-    home_required = "Needs an established home",
+    home_required = "Right-click a location and choose Set Community Home first",
+    follower_limit = "Your active party is full; send someone home before inviting the whole group",
     needs_help = "Needs help first",
     person_unavailable = "Unavailable right now",
 }
@@ -49,6 +50,8 @@ end
 function Interaction.options(view, id, nearHome)
     local result = {}
     local p = view and view.world and view.world.people[id]
+    local me = view and view.world and view.world.people[view.personId]
+    local home = me and me.communityHome
     if not p or not p.controller or p.controller.kind ~= "ai" or p.life == "dead" then
         return result
     end
@@ -79,14 +82,22 @@ function Interaction.options(view, id, nearHome)
         )
     end
     if p.interactionDanger then
+        if p.commanderId == view.personId and p.partyId then
+            add("Cooperate", "View health and provide care", "health.open", {})
+        end
         add("Speak", Danger.MESSAGE, "conversation.talk", { topic = "thoughts" })
         return result
+    end
+    if p.commanderId == view.personId and p.partyId then
+        add("Cooperate", "View health and provide care", "health.open", {})
     end
     add("Speak", "What's on your mind?", "conversation.talk", { topic = "thoughts" })
     if p.life ~= "alive" or p.interactionBusy then
         return result
     end
     add("Speak", "Tell me about yourself", "conversation.talk", { topic = "background" })
+    add("Speak", "Tell me about your household", "conversation.talk", { topic = "household" })
+    add("Speak", "What matters to you?", "conversation.talk", { topic = "outlook" })
     add("Speak", "What should we focus on?", "conversation.talk", { topic = "plans" })
     add("Speak", "Make small talk", "conversation.talk", { topic = "chat" })
     add("Speak", "How are we getting along?", "conversation.talk", { topic = "trust" })
@@ -101,11 +112,18 @@ function Interaction.options(view, id, nearHome)
         if not p.partyId then
             add("Cooperate", "Ask to travel together", "cooperation.request", { request = "travel" })
         end
-        if nearHome and p.communityId and (not p.recruited or p.partyId) then
+        if home and (not p.recruited or p.partyId) then
             add("Cooperate", "Ask to work together at home", "cooperation.request", { request = "resident" })
         end
     end
     if Interaction.canCommand(view, p) then
+        if p.commanderId == view.personId and p.duty == "base" then
+            local roles = require "ProjectPeople/HomeRoles"
+            add("Commands", "Home role: balance automatically", "home.role.set", { role = "auto" })
+            for _, role in ipairs(roles.order) do
+                add("Commands", "Home role: " .. roles.labels[role], "home.role.set", { role = role })
+            end
+        end
         if p.jobId then
             add("Commands", "Recall from supply work", "job.recall", {})
             add("Commands", "Check interrupted supply job", "job.resume", {})
@@ -116,13 +134,8 @@ function Interaction.options(view, id, nearHome)
             if p.duty ~= "wait" then
                 add("Commands", "Wait here / take a break", "duty.set", { duty = "wait" })
             end
-            if p.home and p.duty ~= "base" and (not p.cooperation or p.cooperation.resident.accepted) then
-                add(
-                    "Commands",
-                    nearHome and "Help secure this home" or "Return to your home",
-                    "duty.set",
-                    { duty = "base" }
-                )
+            if home and p.duty ~= "base" and (not p.cooperation or p.cooperation.resident.accepted) then
+                add("Commands", "Return to Community Home", "duty.set", { duty = "base" })
             end
         end
     end

@@ -1,6 +1,7 @@
 -- Persistent regional families, encounters and population rules. No native bodies or loot.
 local Stories = require "ProjectPeople/Content/Stories"
 local Names = require "ProjectPeople/Content/Names"
+local Households = require "ProjectPeople/Population/Households"
 local DevTools = require "ProjectPeople/DevTools"
 local Population = { VERSION = 1, REGION_SIZE = 300, EVENT_BUDGET = 8, RECORD_LIMIT = 1200 }
 local isFinite = DevTools.isFinite
@@ -67,11 +68,20 @@ function Population.era(days)
     end
 end
 local stages = { escaping = true, seeking_refuge = true, settling = true, established = true, relocating = true }
-local plans = Stories.plans
 
 function Population.plan(world, person)
     local group = person.populationGroup and world.population and world.population.groups[person.populationGroup]
-    return group and plans[group.stage] or nil
+    if not group then
+        return nil
+    end
+    local present = 0
+    for _, id in ipairs(group.members or {}) do
+        local member = world.people and world.people[id]
+        if member and member.life == "alive" and member.available ~= false and not member.populationAbsent then
+            present = present + 1
+        end
+    end
+    return Households.plan(world, person, group.stage) or Stories.plan(group.stage, present > 1)
 end
 
 local function entry(group, at, kind)
@@ -84,7 +94,15 @@ end
 local names = Names.firstNames
 local surnames = Names.surnames
 
-local function addGroup(world, population, region, site, now, origin, makePerson)
+local function addGroup(world, population, region, site, now, origin, makePerson, debug)
+    if not debug then
+        for _, existing in pairs(population.groups) do
+            if not existing.historical and (site.x - existing.home.x) ^ 2 + (site.y - existing.home.y) ^ 2 < 30 ^ 2 then
+                population.admissionBlocked = "encounter_spacing"
+                return false
+            end
+        end
+    end
     if count(world.people) + 3 > Population.RECORD_LIMIT then
         population.admissionBlocked = "record_budget"
         return false
@@ -93,11 +111,13 @@ local function addGroup(world, population, region, site, now, origin, makePerson
     local id = "population:" .. region.id .. ":" .. region.serial
     assert(not population.groups[id], "population_identity_conflict")
     local seed = Population.hash(tostring(population.seed) .. ":" .. id)
-    local era = Population.era(Population.age(population, now))
-    local family = roll(seed, "family") < (era == "outbreak" and 0.7 or 0.35)
-    local size = family and 2 + (roll(seed, "third") < 0.4 and 1 or 0) or 1
+    local era = Population.era(debug and debug.days or Population.age(population, now))
+    local family = debug and debug.size > 1 or not debug and roll(seed, "family") < (era == "outbreak" and 0.7 or 0.35)
+    local size = debug and debug.size or family and 2 + (roll(seed, "third") < 0.4 and 1 or 0) or 1
     local encounterRoll = roll(seed, "encounter-size")
-    local present = math.min(size, encounterRoll < 0.65 and 1 or encounterRoll < 0.95 and 2 or 3)
+    local present = debug and size or math.min(size, encounterRoll < 0.65 and 1 or encounterRoll < 0.95 and 2 or 3)
+    local template = Households.select(size, roll(seed, "household"))
+    family = template.family ~= nil
     local stage = era == "outbreak" and "escaping" or era == "aftermath" and "seeking_refuge" or "established"
     local home = { x = site.x, y = site.y, z = site.z }
     local group = {
@@ -115,29 +135,38 @@ local function addGroup(world, population, region, site, now, origin, makePerson
         history = {},
         home = home,
         pressure = 0,
+        household = Households.snapshot(template),
     }
+    if present < size then
+        group.household.separation = family and Stories.separatedFamily or Stories.separatedCompanions
+    end
     local surname = surnames[math.floor(roll(seed, "surname") * #surnames) + 1]
     for i = 1, size do
         local pid = id .. ":" .. i
         assert(not world.people[pid], "population_identity_conflict")
-        local name = names[(math.floor(roll(seed, "name") * #names) + i - 1) % #names + 1] .. " " .. surname
-        local background = Stories.background(era, family)
+        local resident = template.members[i]
+        local memberSurname = family and surname
+            or surnames[(math.floor(roll(seed, "surname") * #surnames) + i - 1) % #surnames + 1]
+        local name = names[(math.floor(roll(seed, "name") * #names) + i - 1) % #names + 1] .. " " .. memberSurname
+        local background = Stories.background(era, size > 1, {
+            life = roll(seed, "life" .. i),
+            detail = roll(seed, "detail" .. i),
+            incident = roll(seed, "incident"),
+            absent = i > present,
+            separated = present < size,
+            companions = not family,
+        })
+        background = background .. " " .. template.history .. " " .. resident.thoughts
         local person = makePerson({
             id = pid,
             name = name,
             background = background,
             location = home,
             attachment = family and 75 or 25,
-            preferences = { travelTrust = family and 20 or 5 },
-            personality = {
-                caution = 30 + math.floor(roll(seed, "caution" .. i) * 55),
-                compassion = 35 + math.floor(roll(seed, "care" .. i) * 55),
-                independence = 30 + math.floor(roll(seed, "independence" .. i) * 60),
-                sociability = 25 + math.floor(roll(seed, "social" .. i) * 60),
-                conscientiousness = era == "long_term" and 80 or 55,
-                aggression = 10,
-            },
+            preferences = resident.preferences,
+            personality = resident.personality,
         })
+        Households.addMember(group.household, pid, resident)
         person.populationGroup = id
         person.communityId = id
         person.home = { x = home.x, y = home.y, z = home.z }
@@ -145,9 +174,6 @@ local function addGroup(world, population, region, site, now, origin, makePerson
             person.populationAbsent = true
             person.available = false
             person.location = {}
-            person.background = Stories.absentRelative
-        elseif family and present < size then
-            person.background = Stories.separatedFamily
         end
         world.people[pid] = person
         world.inventories["person:" .. pid] = { kind = "person", personId = pid }
@@ -164,14 +190,25 @@ local function addGroup(world, population, region, site, now, origin, makePerson
         if family then
             for _, relative in ipairs(relatives) do
                 if pid ~= relative then
-                    world.people[pid].family[relative] = "adult_relative"
+                    world.people[pid].family[relative] = template.family
                 end
+            end
+        end
+        for _, companion in ipairs(relatives) do
+            if pid ~= companion then
+                world.people[pid].relationships[companion] = {
+                    trust = family and 35 or template.id == "temporary_truce" and 5 or 20,
+                    affection = family and 45 or template.id == "temporary_truce" and 0 or 15,
+                    respect = 15,
+                    fear = 0,
+                    anchors = {},
+                }
             end
         end
     end
     world.communities[id] = {
         id = id,
-        name = family and surname .. " family" or surname .. " refuge",
+        name = template.label,
         home = home,
         members = members,
         commanders = { [group.members[1]] = true },
@@ -182,6 +219,56 @@ local function addGroup(world, population, region, site, now, origin, makePerson
     region.groups[#region.groups + 1] = id
     population.admissionBlocked = nil
     return true
+end
+
+-- Explicit debug births use a separate serial region and leave normal budgets/history intact.
+function Population.debugSpawn(world, sites, days, now, makePerson, currentDays)
+    if not world.population then
+        if not isFinite(currentDays) or currentDays < 0 then
+            return fail "debug_spawn_age"
+        end
+        world.population = {
+            version = Population.VERSION,
+            seed = Population.hash(world.worldId),
+            startedAt = now,
+            startDays = currentDays,
+            lastAt = now,
+            regions = {},
+            groups = {},
+            backlog = 0,
+        }
+    end
+    for _, site in ipairs(sites) do
+        if not isFinite(site.x) or not isFinite(site.y) or site.z ~= 0 then
+            return fail "debug_ground_floor_required"
+        end
+    end
+    local pop = world.population
+    local rid = "debug:" .. Population.region(sites[1].x, sites[1].y)
+    local region = pop.regions[rid]
+        or {
+            id = rid,
+            serial = 0,
+            remaining = 0,
+            groups = {},
+            anchor = { x = sites[1].x, y = sites[1].y, z = 0 },
+            discoveredAt = now,
+            nextMigration = now + 365000 * 24,
+        }
+    pop.regions[rid] = region
+    if not addGroup(world, pop, region, sites[1], now, "debug", makePerson, { days = days, size = #sites }) then
+        return fail "record_budget"
+    end
+    local group = pop.groups[region.groups[#region.groups]]
+    group.debug = true
+    for i, id in ipairs(group.members) do
+        local p = world.people[id]
+        p.location = DevTools.copy(sites[i])
+        -- Persist dispatch before the native factory. An uncertain outcome never permits respawn.
+        p.populationBirth = { state = "dispatched", at = now }
+        p.debugOutbreakDays = days
+    end
+    return { ok = true, code = "debug_spawn_dispatched", members = DevTools.copy(group.members), days = days }
 end
 
 local function frozen(world, group)
@@ -402,6 +489,9 @@ function Population.valid(world)
                 return false
             end
             seen[pid] = true
+        end
+        if not Households.valid(group.household, seen) then
+            return false
         end
         if
             group.route

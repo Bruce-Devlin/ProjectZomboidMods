@@ -14,6 +14,7 @@ return {
         settleDistance = 3,
         defendDistance = 1.5,
         defendLeaderDistance = 2,
+        assistLeash = 6,
     },
     avoidance = {
         maxRetries = 2,

@@ -3,8 +3,27 @@ local Mind = require "ProjectPeople/Behaviour/Mind"
 local Dialogue = require "ProjectPeople/Behaviour/Dialogue"
 local Population = require "ProjectPeople/Population/Rules"
 local Trust = require "ProjectPeople/Behaviour/Trust"
+local Households = require "ProjectPeople/Population/Households"
 local Conversation = {}
 local chatter = Text.chatter
+
+local function thoughts(world, p, visitor, now)
+    local personal = Mind.reply(p, visitor)
+    if personal then
+        return personal
+    end
+    -- Biography belongs to Background. Calm thoughts describe the present.
+    if p.jobId then
+        return Text.conversation.supplyJob
+    elseif p.duty == "follow" then
+        return Text.thoughts.follow
+    elseif p.duty == "wait" then
+        return Text.thoughts.wait
+    elseif p.populationGroup then
+        return Households.reply(world, p, "thoughts", now) or Population.plan(world, p) or Text.thoughts.calm
+    end
+    return Text.thoughts.calm
+end
 
 function Conversation.reply(world, id, visitor, topic, now)
     if
@@ -14,6 +33,8 @@ function Conversation.reply(world, id, visitor, topic, now)
         and topic ~= "plans"
         and topic ~= "chat"
         and topic ~= "trust"
+        and topic ~= "household"
+        and topic ~= "outlook"
     then
         return { ok = false, code = "unknown_conversation_topic" }
     end
@@ -38,9 +59,18 @@ function Conversation.reply(world, id, visitor, topic, now)
             or summary.value >= Trust.requirement(p, "resident") and summary.value >= 10 and Text.conversation.trusting
             or Text.conversation.trial
     elseif not topic or topic == "thoughts" then
-        text = Dialogue.reply(world, id, visitor)
+        -- Authored household motives already describe their current concerns.
+        text = (id == "mara" or id == "owen" or id == "ellis") and Dialogue.reply(world, id, visitor)
+            or thoughts(world, p, visitor, now)
     elseif topic == "background" then
-        text = p.background ~= "" and p.background or Dialogue.reply(world, id, visitor)
+        text = p.background and p.background ~= "" and p.background or Text.thoughts.privateBackground
+    elseif topic == "household" then
+        text = Households.reply(world, p, topic, now) or Text.householdStories[id] or Text.conversation.privateHousehold
+    elseif topic == "outlook" then
+        text = Mind.reply(p, visitor)
+            or Households.reply(world, p, topic, now)
+            or Text.outlooks[id]
+            or (p.preferences.baseOnly and Text.conversation.home or Text.conversation.trial)
     elseif topic == "plans" then
         text = Mind.reply(p, visitor)
             or (
@@ -53,12 +83,16 @@ function Conversation.reply(world, id, visitor, topic, now)
     else
         text = Mind.reply(p, visitor)
         if not text then
+            text = Households.reply(world, p, "chat", now)
+        end
+        if not text then
             -- Stable for a game hour; no global RNG consumption or click farming.
             local seed = 0
             for i = 1, #id do
                 seed = (seed * 31 + string.byte(id, i)) % 65521
             end
-            text = chatter[(seed + math.floor(now or 0)) % #chatter + 1]
+            local lines = Text.personalChatter[id] or chatter
+            text = lines[(seed + math.floor(now or 0)) % #lines + 1]
         end
     end
     return { ok = true, code = "conversation", message = text }

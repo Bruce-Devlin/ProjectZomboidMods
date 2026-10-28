@@ -1,3 +1,4 @@
+local Theme = require "ProjectPeople/UITheme"
 require "ISUI/ISPanel"
 require "ISUI/ISButton"
 require "ISUI/ISScrollingListBox"
@@ -17,6 +18,7 @@ end
 
 local function child(self, widget)
     widget:initialise()
+    Theme.widget(widget)
     self:addChild(widget)
     return widget
 end
@@ -39,7 +41,7 @@ function Panel:createChildren()
         list.drawBorder = true
         list.doDrawItem = function(box, y, row, alt)
             if box.selected == row.index then
-                box:drawRect(0, y, box.width, box.itemheight, 0.4, 0.3, 0.5, 0.7)
+                Theme.row(box, y, row, box.itemheight)
             end
             local e = row.item
             box:drawText(
@@ -227,7 +229,7 @@ end
 
 function Panel:prerender()
     ISPanel.prerender(self)
-    self:drawText("Trade and equipment: " .. clean(self.data.name), 12, 10, 1, 1, 1, 1, UIFont.Medium)
+    Theme.header(self, "Equipment / " .. clean(self.data.name), "bag")
     self:drawText("Your inventory", 12, 42, 0.8, 0.85, 0.9, 1, UIFont.Small)
     self:drawText(
         string.format("Their inventory: %.1f / %.1f", self.data.npc.weight, self.data.npc.capacity),
@@ -271,7 +273,7 @@ local function open(data)
             height
         )
         current.data = data
-        current.backgroundColor = { r = 0.07, g = 0.08, b = 0.1, a = 0.97 }
+        Theme.panel(current)
         current:initialise()
         current:addToUIManager()
         current.moveWithMouse = true

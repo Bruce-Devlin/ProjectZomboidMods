@@ -379,6 +379,12 @@ function Service.new(config)
             original:setDrawDirty(true)
             destination:setDrawDirty(true)
             if gift then
+                apply(
+                    "trust.reward",
+                    { personId = a.person.id, sourcePersonId = a.who.personId, reward = "gift" },
+                    { kind = "trust_reward", personId = a.person.id, actorId = a.who.personId, reward = "gift" }
+                )
+                save("gift_trust", operation)
                 local equipped = false
                 local message = "Gift accepted and kept in their inventory; they already have similar equipment."
                 if giftEquip then

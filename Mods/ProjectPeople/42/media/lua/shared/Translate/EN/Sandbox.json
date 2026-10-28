@@ -1,5 +1,11 @@
 {
+    "Sandbox_ProjectPeople_TrustGainMultiplier": "Trust gain multiplier",
+    "Sandbox_ProjectPeople_TrustGainMultiplier_tooltip": "Scales positive trust from conversations, combat support, healing, gifts, shared travel and helpful deeds. 0 disables gains; 1 is normal; 2 doubles gains. Trust losses are unchanged.",
     "Sandbox_ProjectPeople": "Project People",
+    "Sandbox_ProjectPeople_ActiveFollowerLimit": "Maximum active followers per player",
+    "Sandbox_ProjectPeople_ActiveFollowerLimit_tooltip": "Maximum people in one player's travelling party, including companions waiting nearby. Default 3. Whole groups must fit. Sending people to Community Home frees their places. Lowering this never dismisses existing companions; it prevents new invitations until there is room.",
+    "Sandbox_ProjectPeople_DebugEnabled": "Enable Project People debug tools",
+    "Sandbox_ProjectPeople_DebugEnabled_tooltip": "Show the spawned-NPC roster, tracking, spawn presets and NPC cheats. On a server this grants these tools to every living player. Server roles with the Debug Context Menu capability can use them without this option; single-player debug mode also grants access. Debug changes are saved. Default off.",
     "Sandbox_ProjectPeople_PopulationEnabled": "Populate the world with survivors",
     "Sandbox_ProjectPeople_PopulationEnabled_tooltip": "Create persistent groups as you explore and continue their plans in game time. Disabling pauses new arrivals and background stories; existing people, bodies and memories remain.",
     "Sandbox_ProjectPeople_PopulationDensity": "Survivor population multiplier",

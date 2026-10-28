@@ -1,2 +1,2 @@
 -- Kept for existing require paths.
-return require "ProjectPeople/Content/Household"
+return require "ProjectPeople/Content/ReedHousehold"

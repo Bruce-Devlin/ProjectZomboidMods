@@ -1,3 +1,4 @@
+local Theme = require "ProjectPeople/UITheme"
 -- Original client UI. Every gameplay request goes through the injected runtime
 -- API with the displayed world revision. This module never changes native actors.
 require "ISUI/ISPanel"
@@ -97,6 +98,7 @@ end
 
 local function widget(parent, value, group)
     value:initialise()
+    Theme.widget(value)
     parent:addChild(value)
     if group then
         group[#group + 1] = value
@@ -424,6 +426,8 @@ function Panel:updateContent()
     end
     local person = self:person()
     local personTab = self.tab == "person"
+    Theme.button(self.personTab, personTab)
+    Theme.button(self.missionTab, not personTab)
     local mission = self.world and self.selectedMissionId and self.world.missions[self.selectedMissionId]
     showGroup(self.personWidgets, personTab)
     self.assignment:setVisible(not personTab)
@@ -432,12 +436,30 @@ function Panel:updateContent()
     local content = "Select a known person to speak with them."
     if person then
         content = "<H2> " .. line(person.name) .. "<TEXT> "
+        if person.homeWorkSummary then
+            content = content .. line("Home role: " .. person.homeWorkSummary)
+        end
         if person.trust then
             content = content .. line("Trust in you: " .. person.trust.label .. " (" .. person.trust.value .. ")")
+            if person.health then
+                content = content .. line(string.format("Health: %.0f%%", person.health))
+            end
             if person.cooperation then
                 content = content
-                    .. line("Travel: " .. Interaction.reason(person.cooperation.travel.reason))
-                    .. line("Home: " .. Interaction.reason(person.cooperation.resident.reason))
+                    .. line(
+                        "Travel: "
+                            .. (
+                                person.cooperation.travel.detail
+                                or Interaction.reason(person.cooperation.travel.reason)
+                            )
+                    )
+                    .. line(
+                        "Home: "
+                            .. (
+                                person.cooperation.resident.detail
+                                or Interaction.reason(person.cooperation.resident.reason)
+                            )
+                    )
             end
             content = content .. line(person.trust.guidance)
             if (person.trust.travelHours or 0) > 0 then
@@ -520,7 +542,7 @@ function Panel:updateContent()
             or "Ask to travel together"
     )
     if travel and person.cooperation then
-        self.travel.tooltip = Interaction.reason(person.cooperation.travel.reason)
+        self.travel.tooltip = (person.cooperation.travel.detail or Interaction.reason(person.cooperation.travel.reason))
     end
     for group, control in pairs(self.conversationGroups) do
         control:setEnable(not self.busy and (groups[group] or group == "Cooperate" and groups["At home"]) == true)
@@ -618,7 +640,7 @@ function Panel:createChildren()
     button(self.width - 76, 10, 64, "Close", function()
         self:setVisible(false)
     end)
-    button(right, 66, 120, "Conversation", function()
+    self.personTab = button(right, 66, 120, "Conversation", function()
         self:setTab "person"
     end)
     self.missionTab = button(right + 128, 66, 120, "Assignments", function()
@@ -631,28 +653,26 @@ function Panel:createChildren()
         panel:selectPerson(id)
     end)
     self.roster.doDrawItem = function(list, y, item)
-        if list.selected == item.index then
-            list:drawSelection(0, y, list.width, 44)
-        end
+        Theme.row(list, y, item, 45)
         local person = self.world and self.world.people[item.item]
-        list:drawText(plain(person and person.name or item.text), 8, y + 5, 1, 1, 1, 1, UIFont.Small)
+        Theme.text(list, person and person.name or item.text, 12, y + 5, list.width - 30)
         local subtitle = person
                 and (person.life == "dead" and "Deceased" or person.trust and person.trust.label or self.nearby[person.id] and "Nearby" or "Known person")
             or ""
-        list:drawText(subtitle, 8, y + 24, 0.7, 0.75, 0.8, 1, UIFont.Small)
+        Theme.text(list, subtitle, 12, y + 24, list.width - 30, Theme.colors.muted)
         return y + 45
     end
     local profileHeight = math.min(178, math.floor((self.height - 280) * 0.55))
     self.details = rich(self, right, 104, width, profileHeight, self.personWidgets)
     self.dialogue = rich(self, right, 112 + profileHeight, width, self.height - 292 - profileHeight, self.personWidgets)
     self.dialogue.background = true
-    self.dialogue.backgroundColor = { r = 0.08, g = 0.10, b = 0.12, a = 0.95 }
+    self.dialogue.backgroundColor = Theme.colors.surface
     self.travel = button(right, self.height - 168, width, "Ask to travel together", function()
         if self.selectedPersonId then
             self:submit("cooperation.request", { personId = self.selectedPersonId, request = "travel" })
         end
     end, self.personWidgets)
-    self.travel.backgroundColor = { r = 0.16, g = 0.28, b = 0.22, a = 1 }
+    Theme.button(self.travel, true)
     self.conversationGroups = {}
     local half = math.floor((width - 8) / 2)
     for index, group in ipairs({ "Speak", "Cooperate", "Commands", "Confront" }) do
@@ -717,10 +737,12 @@ function Panel:createChildren()
         self.missionWidgets
     )
     self.feedback = rich(self, 12, self.height - 54, self.width - 24, 45)
+    self.feedback.background = true
+    self.feedback.backgroundColor = Theme.colors.surface
 end
 
 function Panel:render()
-    self:drawText("People", 14, 12, 1, 1, 1, 1, UIFont.Medium)
+    Theme.header(self, "People", "people", self.width - 130)
     local status = self.runtimeStatus or {}
     self:drawText(
         plain(
@@ -758,8 +780,7 @@ function Panel:new(x, y, w, h)
     value.replies = {}
     value.nearby = {}
     value.draftParticipants = {}
-    value.backgroundColor = { r = 0.06, g = 0.07, b = 0.08, a = 0.96 }
-    value.borderColor = { r = 0.34, g = 0.4, b = 0.45, a = 1 }
+    Theme.panel(value)
     value.moveWithMouse = true
     return value
 end
@@ -831,6 +852,7 @@ local function ensureButton()
         end
     )
     peopleButton:initialise()
+    Theme.button(peopleButton)
     peopleButton:addToUIManager()
 end
 

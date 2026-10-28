@@ -55,6 +55,9 @@ function Behaviour.interact(world, command, context)
     local result = command.topic == "threaten" and Conversation.threaten(person, context.actorId, context.gameTime)
         or Mind.interact(person, context.actorId, command.topic, context.gameTime)
     if result.ok then
+        if command.topic ~= "threaten" then
+            Trust.reward(person, context.actorId, "conversation", context.gameTime)
+        end
         person.revision = person.revision + 1
     end
     return result

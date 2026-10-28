@@ -8,6 +8,9 @@ local Trust = require "ProjectPeople/Behaviour/Trust"
 local Danger = require "ProjectPeople/InteractionDanger"
 local SocialGroup = require "ProjectPeople/Behaviour/Groups"
 local FriendlyFire = require "ProjectPeople/FriendlyFire"
+local Interaction = require "ProjectPeople/Interaction"
+local Party = require "ProjectPeople/Party"
+local HomeRoles = require "ProjectPeople/HomeRoles"
 local Service = { VERSION = 1 }
 
 function Service.open(config)
@@ -18,15 +21,26 @@ function Service.open(config)
     local self = { authority = authority, known = {}, receipts = {}, receiptOrder = {}, signatures = {} }
     local function groupReady(caller, target, world)
         for _, id in ipairs(SocialGroup.members(world, target, true)) do
-            if
-                config.available and not config.available(id)
-                or config.groupAvailable and not config.groupAvailable(caller, id)
-                or config.interactionDanger and config.interactionDanger(id, world.people[id])
-            then
-                return false
+            if config.available and not config.available(id) then
+                return false, id, "I can't find them nearby. Wait for them to catch up."
+            end
+            if config.groupAvailable then
+                local ready, why = config.groupAvailable(caller, id)
+                if not ready then
+                    return false,
+                        id,
+                        why or "They are too far away. Bring the group within twelve tiles on the same floor."
+                end
+            end
+            if config.interactionDanger and config.interactionDanger(id, world.people[id]) then
+                return false, id, "They are in danger. Get everyone somewhere safe first."
             end
         end
         return true
+    end
+    local function groupMessage(world, id, why)
+        local name = world.people[id] and world.people[id].name or "A companion"
+        return name .. ": " .. why
     end
     function self:discover(caller)
         local registered = authority:registerPlayer(caller)
@@ -74,6 +88,10 @@ function Service.open(config)
         if type(request) ~= "table" or type(request.id) ~= "string" or #request.id == 0 or #request.id > 128 then
             return { ok = false, code = "invalid_request" }
         end
+        local debugging = type(request.kind) == "string" and request.kind:sub(1, 6) == "debug."
+        if debugging and (not config.canDebug or not config.canDebug(caller)) then
+            return { ok = false, code = "debug_not_allowed" }
+        end
         local identity = config.authenticate(caller)
         if not identity or not identity.validated or (not identity.alive and request.kind ~= "succession.reserve") then
             return { ok = false, code = "living_character_required" }
@@ -93,7 +111,9 @@ function Service.open(config)
         -- adapters are connected. A UI must never acknowledge imaginary work.
         local result
         local target = type(request.fields) == "table" and request.fields.personId
-        if request.kind == "succession.reserve" and type(config.succession) == "function" then
+        if debugging and type(config.debug) == "function" then
+            result = config.debug(caller, request)
+        elseif request.kind == "succession.reserve" and type(config.succession) == "function" then
             result = config.succession(caller, target)
         elseif target and config.available and not config.available(target) then
             result = { ok = false, code = "person_unavailable" }
@@ -114,6 +134,10 @@ function Service.open(config)
             ) and type(config.equipment) == "function"
         then
             result = config.equipment(caller, request.kind, request.fields)
+        elseif
+            (request.kind == "health.open" or request.kind == "health.treat") and type(config.health) == "function"
+        then
+            result = config.health(caller, request.kind, request.fields)
         elseif request.kind == "conversation.talk" then
             local close = false
             for _, id in ipairs(config.nearby(caller) or {}) do
@@ -140,6 +164,13 @@ function Service.open(config)
                         request.fields.topic,
                         config.clock()
                     )
+                    if result.ok and authority:snapshot().people[target].life == "alive" then
+                        local reward =
+                            Trust.record(authority, target, identity.personId, "conversation", config.clock())
+                        if not reward.ok then
+                            result = reward
+                        end
+                    end
                 end
             end
         elseif request.kind == "help.secure_home" and type(config.help) == "function" then
@@ -166,22 +197,37 @@ function Service.open(config)
             and request.kind ~= "duty.set"
             and request.kind ~= "behaviour.interact"
             and request.kind ~= "friendly_fire.set"
+            and request.kind ~= "community.home.set"
+            and request.kind ~= "home.role.set"
         then
             result = { ok = false, code = "request_not_supported" }
         else
-            if
-                (request.kind == "cooperation.request" or request.kind == "duty.set")
-                and not groupReady(caller, target, authority:snapshot())
-            then
+            local world = authority:snapshot()
+            local ready, blockedMember, detail = true, nil, nil
+            if request.kind == "cooperation.request" or request.kind == "duty.set" then
+                ready, blockedMember, detail = groupReady(caller, target, world)
+            end
+            if (request.kind == "cooperation.request" or request.kind == "duty.set") and not ready then
                 result = {
                     ok = false,
                     code = "group_not_ready",
-                    message = "We stay together. Everyone needs to be nearby, safe and ready.",
+                    message = groupMessage(world, blockedMember, detail),
                 }
             else
                 result = authority:request(caller, request.kind, request.fields, request.revision)
                 if result.code == "group_not_ready" then
-                    result.message = "We stay together. Not everyone is willing and able to come."
+                    local _, _, why, member = Core.decide(
+                        world,
+                        target,
+                        identity.personId,
+                        request.fields.request or (request.fields.duty == "base" and "resident" or "travel")
+                    )
+                    result.message = groupMessage(
+                        world,
+                        member,
+                        why and Interaction.reason(why) .. ". We need to agree before the group can leave."
+                            or "Someone has another order or commitment. Finish it before changing the group's plans."
+                    )
                 end
             end
         end
@@ -249,6 +295,9 @@ function Service.open(config)
                     family = {},
                     revision = p.revision,
                 }
+                if id == me.id then
+                    shown.communityHome = p.communityHome and Core.snapshot(p.communityHome) or nil
+                end
                 if id ~= me.id and p.controller.kind == "ai" then
                     shown.trust = Trust.summary(p, me.id)
                 end
@@ -257,6 +306,8 @@ function Service.open(config)
                     shown.canSetFriendlyFire = FriendlyFire.canSet(world, id, me.id)
                 end
                 if p.commanderId == me.id or id == me.id then
+                    shown.homeWork = p.homeWork and Core.snapshot(p.homeWork) or nil
+                    shown.homeWorkSummary = HomeRoles.summary(p.homeWork)
                     shown.jobId = p.jobId
                     if p.jobId and world.jobs and world.jobs[p.jobId] then
                         shown.job = Core.snapshot(world.jobs[p.jobId])
@@ -277,21 +328,53 @@ function Service.open(config)
                 -- a live window into somebody's private distant mental state.
                 for _, nearId in ipairs(discovered.nearby) do
                     if nearId == id then
+                        if p.commanderId == me.id and p.partyId and config.healthSummary then
+                            shown.health = config.healthSummary(id)
+                        end
                         shown.wellbeing = Mind.summary(p)
                         shown.personalConversations = not p.mind or p.mind.policy.enabled
                         shown.home = p.home and Core.snapshot(p.home) or nil
                         shown.interactionBusy = p.reservationId ~= nil or p.transitionId ~= nil or p.missionId ~= nil
                         shown.interactionDanger = config.interactionDanger and config.interactionDanger(id, p) == true
                             or false
-                        local travel, travelReason = Core.decide(world, id, me.id, "travel")
-                        local resident, residentReason = Core.decide(world, id, me.id, "resident")
-                        if not groupReady(caller, id, world) then
+                        local travel, travelReason, travelDetail, travelMember = Core.decide(
+                            world,
+                            id,
+                            me.id,
+                            "travel",
+                            nil,
+                            config.followerLimit and config.followerLimit()
+                        )
+                        local resident, residentReason, residentDetail, residentMember =
+                            Core.decide(world, id, me.id, "resident")
+                        local ready, blockedMember, detail = groupReady(caller, id, world)
+                        if not ready then
                             travel, travelReason = false, "group_not_ready"
                             resident, residentReason = false, "group_not_ready"
+                            travelDetail, residentDetail = detail, detail
+                            travelMember, residentMember = blockedMember, blockedMember
                         end
                         shown.cooperation = {
-                            travel = { accepted = travel, reason = travelReason },
-                            resident = { accepted = resident, reason = residentReason },
+                            travel = {
+                                accepted = travel,
+                                reason = travelReason,
+                                detail = travelMember
+                                    and groupMessage(
+                                        world,
+                                        travelMember,
+                                        ready and Interaction.reason(travelDetail) or travelDetail
+                                    ),
+                            },
+                            resident = {
+                                accepted = resident,
+                                reason = residentReason,
+                                detail = residentMember
+                                    and groupMessage(
+                                        world,
+                                        residentMember,
+                                        ready and Interaction.reason(residentDetail) or residentDetail
+                                    ),
+                            },
                         }
                         break
                     end
@@ -317,8 +400,12 @@ function Service.open(config)
         }
         status.actions["storage.mark"] = type(config.job) == "function"
         status.actions["friendly_fire.set"] = true
+        status.actions["community.home.set"] = true
+        status.actions["home.role.set"] = true
+        status.followerLimit = Party.limit(config.followerLimit and config.followerLimit())
         status.actions["inventory.open"] = type(config.equipment) == "function"
         status.actions["gift.open"] = type(config.equipment) == "function"
+        status.actions["health.open"] = type(config.health) == "function"
         status.actions["job.start"] = type(config.job) == "function"
         status.actions["job.recall"] = type(config.job) == "function"
         status.actions["job.resume"] = type(config.job) == "function"

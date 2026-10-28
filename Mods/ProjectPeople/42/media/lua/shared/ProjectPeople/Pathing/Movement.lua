@@ -2,6 +2,7 @@
 local Settings = require "ProjectPeople/Pathing/Settings"
 local DevTools = require "ProjectPeople/DevTools"
 local Space = require "ProjectPeople/Pathing/CombatSpace"
+local Scavenging = require "ProjectPeople/Pathing/Scavenging"
 local Movement = {}
 local distanceSquared = DevTools.distanceSquared
 local position = DevTools.position
@@ -24,7 +25,17 @@ end
 function Movement.attention(person, movementRecord, actor, online, identity)
     local previous = movementRecord.attentionId
     Movement.clearAttention(movementRecord)
+    if movementRecord.homeActive and person.homeWork and person.homeWork.breakKind ~= "relax" then
+        return false
+    end
     if not permitted(person) or person.duty == "follow" then
+        return false
+    end
+    if
+        person.duty == "base"
+        and person.home
+        and (math.abs(actor:getZ() - person.home.z) > 0.2 or distanceSquared(position(actor), person.home) > 4)
+    then
         return false
     end
     local best, bestId, bestDistance
@@ -100,10 +111,22 @@ local function walkable(actor, target)
     return { x = sq:getX() + 0.5, y = sq:getY() + 0.5, z = sq:getZ(), shelter = sq:getBuilding() ~= nil }
 end
 
+-- Destination safety and a straight walking segment are different questions.
+-- Native paths can use gates, corners and fences when leaving an enclosed yard.
+function Movement.destination(actor, target)
+    local from = actor:getCurrentSquare()
+    local sq = getCell():getGridSquare(math.floor(target.x), math.floor(target.y), math.floor(target.z))
+    if not from or not sq or sq:getBuilding() and sq:getBuilding() ~= from:getBuilding() then
+        return nil -- Building entry is still staged at a usable door.
+    end
+    return Scavenging.floor(sq)
+end
+
 function Movement.new(adapters)
     adapters = adapters or {}
     local validate = adapters.walkable or walkable
     local states = {}
+    local entryStates = {}
     local trails, followers, glances = {}, {}, {}
     local self = {}
     -- One bounded history per registered living human, sampled by the existing
@@ -170,6 +193,30 @@ function Movement.new(adapters)
             state.cursor = points[#points].sequence
             return nil
         end
+        -- On clear ground catch up to a point behind the current leader rather
+        -- than replaying old breadcrumbs. Obstructed routes keep their bends.
+        local leaderAt = position(leader)
+        local separation = math.sqrt(distanceSquared(origin, leaderAt))
+        if
+            state.target
+            and points[#points].sequence > (state.leaderSequence or 0)
+            and separation > Settings.follow.catchUpDistance
+            and math.abs(origin.z - leaderAt.z) < 0.2
+        then
+            local direct = validate(actor, {
+                x = leaderAt.x + (origin.x - leaderAt.x) / separation * gap,
+                y = leaderAt.y + (origin.y - leaderAt.y) / separation * gap,
+                z = leaderAt.z,
+            })
+            if direct then
+                state.cursor = points[#points].sequence
+                direct.sequence = points[#points].sequence
+                state.target = direct
+                state.leaderSequence = points[#points].sequence
+                state.progressAt, state.remaining = now, distanceSquared(origin, direct)
+                return direct
+            end
+        end
         -- A U-turn can leave an unconsumed waypoint behind the human. Rejoin
         -- the newer trail when that waypoint leads away across clear ground;
         -- retain bends/obstacles when a direct connection is not walkable.
@@ -209,6 +256,28 @@ function Movement.new(adapters)
             end
             first = first or 1
             state.cursor = points[first].sequence
+        end
+        if state.target then
+            local remaining = distanceSquared(origin, state.target)
+            if not state.progressAt or remaining < (state.remaining or math.huge) - 0.15 then
+                state.progressAt, state.remaining = now, remaining
+            elseif now - state.progressAt > 2500 then
+                -- A missed/blocked breadcrumb must not pin a follower forever.
+                -- Rejoin a newer, locally walkable footprint; never teleport.
+                for i = #points, 1, -1 do
+                    local point = points[i]
+                    if
+                        point.sequence > state.target.sequence
+                        and math.abs(point.z - origin.z) < 0.2
+                        and validate(actor, point)
+                    then
+                        state.cursor = point.sequence
+                        state.target = nil
+                        break
+                    end
+                end
+                state.progressAt, state.remaining = now, nil
+            end
         end
         if state.target then
             if
@@ -274,6 +343,8 @@ function Movement.new(adapters)
             return nil
         end
         state.target = target
+        state.leaderSequence = points[#points].sequence
+        state.progressAt, state.remaining = now, distanceSquared(origin, target)
         return target
     end
     function self:lookAround(person, movementRecord, actor, now)
@@ -453,21 +524,42 @@ function Movement.new(adapters)
             end
         end
         local origin = position(actor)
-        if leader and leader.personId ~= person.id then
+        local protected = Scavenging.homes(world)
+        local leavingHome = protected(origin)
+        if leader and leader.personId ~= person.id and not protected(leader) then
             self:clear(person.id)
-            if leader.z ~= origin.z or distanceSquared(origin, leader) > 24 ^ 2 then
+            if distanceSquared(origin, leader) > 24 ^ 2 then
                 movementRecord.activity = "Waiting for the group"
                 return nil
             end
-            if distanceSquared(origin, leader) <= 3 ^ 2 then
+            if math.abs(leader.z - origin.z) < 0.2 and distanceSquared(origin, leader) <= 3 ^ 2 then
                 movementRecord.activity = "Staying with the group"
                 return nil
             end
             movementRecord.activity = "Staying with the group"
+            if not adapters.walkable and actor:getCurrentSquare() then
+                local sq = getCell():getGridSquare(math.floor(leader.x), math.floor(leader.y), math.floor(leader.z))
+                local building = sq and sq:getBuilding()
+                if building and actor:getCurrentSquare():getBuilding() ~= building then
+                    entryStates[person.id] = entryStates[person.id] or {}
+                    return Scavenging.entrance(actor, building, entryStates[person.id], now)
+                end
+            end
             for _, d in ipairs({ { 1, 0 }, { 0, 1 }, { -1, 0 }, { 0, -1 } }) do
                 local goal = validate(actor, { x = leader.x + d[1], y = leader.y + d[2], z = leader.z })
                 if goal then
                     return goal
+                end
+                if not adapters.walkable then
+                    local sq = getCell():getGridSquare(
+                        math.floor(leader.x + d[1]),
+                        math.floor(leader.y + d[2]),
+                        math.floor(leader.z)
+                    )
+                    local route = Scavenging.floor(sq)
+                    if route then
+                        return route
+                    end
                 end
             end
             return nil
@@ -482,7 +574,7 @@ function Movement.new(adapters)
                 and not member.duty
                 and other
                 and not other.dead
-                and (other.z ~= origin.z or distanceSquared(origin, other) > 8 ^ 2)
+                and distanceSquared(origin, other) > 8 ^ 2
             then
                 movementRecord.activity = "Waiting for the group"
                 return nil
@@ -500,31 +592,52 @@ function Movement.new(adapters)
             or group.stage == "settling" and "Checking the refuge"
             or "Patrolling the refuge"
         movementRecord.activity = activity
+        if state.goal and protected(state.goal, state.building) or state.inspect and protected(state.inspect) then
+            state.goal, state.inspect, state.building, state.buildingUntil = nil, nil, nil, nil
+            state.entryGoal, state.entryBuilding, state.nextSearch = nil, nil, now
+        end
         if state.goal then
+            -- A deliberate dialogue hold stops the body. Resuming that leg
+            -- must not count the time spent talking as a blocked path.
+            if movementRecord.mode == "wait" then
+                state.progressAt = now
+                state.startedAt = now
+            end
             local d = distanceSquared(origin, state.goal)
-            if d <= 1 then
+            if math.abs(origin.z - state.goal.z) < 0.2 and d <= (state.goal.entry and 0.25 or 1) then
                 local reached = state.goal
                 state.goal = nil
                 state.leg = state.leg + 1
-                state.nextSearch = now + (reached.searchKey and 5000 or travelling and 750 or 3500)
+                state.nextSearch = now
+                    + (reached.entry and 0 or reached.searchKey and 5000 or travelling and 750 or 3500)
                 state.inspect = reached.searchKey and reached or nil
                 if reached.searchKey then
                     state.searched[#state.searched + 1] = { key = reached.searchKey, at = now }
-                    while #state.searched > 8 do
+                    while #state.searched > 16 do
                         table.remove(state.searched, 1)
                     end
                 end
-            elseif now - state.progressAt > 10000 then
+            elseif now - state.progressAt > 5000 or now - (state.startedAt or now) > 30000 then
                 state.failed = state.goal
                 state.failedAt = now
+                state.failedGoals = state.failedGoals or {}
+                state.failedGoals[#state.failedGoals + 1] = { goal = state.goal, at = now }
+                while #state.failedGoals > 8 do
+                    table.remove(state.failedGoals, 1)
+                end
                 state.goal = nil
                 state.leg = state.leg + 1
                 state.nextSearch = now + 1000
                 movementRecord.activity = "Looking for another route"
             else
-                if d < state.distance - 0.5 then
+                if
+                    d < state.distance - 0.5
+                    or not state.progressOrigin
+                    or distanceSquared(origin, state.progressOrigin) > 0.5 ^ 2
+                then
                     state.progressAt = now
                     state.distance = d
+                    state.progressOrigin = origin
                 end
                 movementRecord.activity = state.activity
                 return state.goal
@@ -542,8 +655,29 @@ function Movement.new(adapters)
         state.nextSearch = now + 3000
         local bearing = (group.seed % 8) * math.pi / 4
         local best, bestScore
-        if group.stage == "settling" or group.stage == "established" and state.leg % 3 == 1 then
+        if adapters.scavenge then
+            best = adapters.scavenge(actor, state, now, person.id)
+        elseif not adapters.walkable then
+            best = Scavenging.pick(actor, state, now, person.id, function(building)
+                for otherId, other in pairs(states) do
+                    if otherId ~= person.id and other.building == building and now < (other.buildingUntil or 0) then
+                        return true
+                    end
+                end
+                return false
+            end, protected)
+        end
+        if best and protected(best) then
+            best = nil
+        end
+        if best then
+            bestScore = 100
+        end
+        if not best and (group.stage == "settling" or group.stage == "established" and state.leg % 3 == 1) then
             best = search(actor, state, now)
+            if best and protected(best) then
+                best = nil
+            end
             if best and state.failed and now - state.failedAt < 30000 and distanceSquared(best, state.failed) < 4 then
                 best = nil
             end
@@ -553,15 +687,18 @@ function Movement.new(adapters)
         end
         for n = 0, 15 do
             local angle = bearing + (n % 8) * math.pi / 4 + (travelling and 0 or state.leg * math.pi / 3)
-            local radius = n < 8 and (travelling and 8 or 5) or (travelling and 4 or 3)
-            local anchor = travelling and origin or group.home
-            local goal = validate(
-                actor,
+            local radius = leavingHome and (n < 8 and 16 or 12)
+                or n < 8 and (travelling and 8 or 5)
+                or (travelling and 4 or 3)
+            local anchor = (travelling or leavingHome) and origin or group.home
+            local candidate =
                 { x = anchor.x + math.cos(angle) * radius, y = anchor.y + math.sin(angle) * radius, z = origin.z }
-            )
+            local goal = validate(actor, candidate) or not adapters.walkable and Movement.destination(actor, candidate)
             if
                 goal
+                and not protected(goal)
                 and distanceSquared(origin, goal) > 2.25
+                and not Scavenging.failed(state, goal, now)
                 and not (state.failed and now - state.failedAt < 30000 and distanceSquared(goal, state.failed) < 4)
             then
                 local score = -(n % 8)
@@ -583,10 +720,13 @@ function Movement.new(adapters)
         if best then
             state.goal = best
             state.distance = distanceSquared(origin, best)
-            state.progressAt = now
+            state.progressAt, state.startedAt, state.progressOrigin = now, now, origin
             state.activity = activity
             if best.searchKey then
                 state.activity = "Looking for supplies"
+            end
+            if best.entry then
+                state.activity = "Finding a house entrance"
             end
             if group.stage == "seeking_refuge" and best.shelter then
                 state.activity = "Checking possible shelter"

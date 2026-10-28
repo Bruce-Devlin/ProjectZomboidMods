@@ -1,3 +1,4 @@
+local Theme = require "ProjectPeople/UITheme"
 local Runtime = require "ProjectPeople/SurvivorRuntime"
 require "ISUI/ISButton"
 local attached
@@ -50,5 +51,6 @@ Events.OnTick.Add(function()
         end
     end)
     button:initialise()
+    Theme.button(button)
     panel:addChild(button)
 end)

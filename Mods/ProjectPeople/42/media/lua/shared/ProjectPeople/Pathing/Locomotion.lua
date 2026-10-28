@@ -196,9 +196,14 @@ function Locomotion.new(adapters)
             local defend = closest <= Settings.follow.defendDistance ^ 2
                 and not leader:isMoving()
                 and Space.distance(actor, leader) <= Settings.follow.defendLeaderDistance ^ 2
-            return nil, not defend
+            return nil, not (defend or movementRecord.companionCombat)
         end
         movementRecord.catchingUp = nil
+        if movementRecord.homeGuard then
+            states[person.id] = nil
+            movementRecord.gait = "walk"
+            return nil, false
+        end
         if movementRecord.attentionId and not urgent and not state.escape then
             state.attempts = 0
             state.detour = nil
